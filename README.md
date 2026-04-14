@@ -93,8 +93,7 @@ ppid: 1234  pid: 5678
 (defmonitor my-exec-monitor (monitor-base)
   ((extra-slot :initarg :extra :reader get-extra)))
   (:bpftrace
-   (:printf (get-idx my-monitor)
-            :u32 "ppid" :u32 "pid" :string "comm")))
+   (:printf :u32 "ppid" :u32 "pid" :string "comm")))
 ```
 
 ### 2. 规则（Rule）
