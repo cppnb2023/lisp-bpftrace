@@ -6,12 +6,24 @@
 
 (in-package :bpftrace-dsl)
 
+(eval-when (:load-toplevel :execute)
+  (set-macro-character
+	#\[
+	(lambda (stream char)
+	  (let* ((len (read stream))
+				(str (make-array len :element-type 'character
+									  :fill-pointer 0)))
+		 (dotimes (i len)
+			(vector-push (read-char stream) str))
+		 str))))
+
 (defun generate-occupy (keyword)
   ;;小心使用:str，因为bpftrace工具的原因没什么完美解决方案
   ;;能不用就不用，尤其是comm，username最好去proc目录去读
   ;;已经提供了读proc目录文件的函数了
   (ecase keyword
-	 (:str "\\\"%s\\\"")
+	 (:str "[%d %s")
+	 (:ustr "[%d %s")
 	 (:i32 "%d")
 	 (:u32 "%u")
 	 (:i64 "%ld")
@@ -40,17 +52,20 @@
 (defun generate-args (plist &key (start "") (end ""))
   (flet ((-> (k v)
 			  (cond
-				;;((eq k :str)))
+				 ((eq k :str)
+				  (format nil "strlen(str(~a)), ~a" v v))
+				 ((eq k :ustr)
+				  (format nil "strlen(ustr(~a)), ~a" v v))
 				 (t v))))
 	 (do-plist-stage-format (k v plist)
-		(:first (:format "~a~a" start v))
+		(:first (:format "~a~a" start (-> k v)))
 		(:main  (:format ", ~a" (-> k v)))
 		(:end   (:format "~a" end)))))
 
 (defun bpftrace-printf (idx &rest plist)
-  (format nil "printf(\"(:hash ~a ~a)\\n\" ~a)" idx
+  (format nil "printf(\"(:hash ~a ~a)\\n\"~a)" idx
 			 (generate-fmt plist)
-			 (generate-args plist :start (if plist "," ""))))
+			 (generate-args plist :start (if plist ", " ""))))
 
 (defun build-sentence (string)
   (if (or-char= (array-last string) #\{ #\} #\;)
@@ -75,7 +90,7 @@
 (defun bpftrace-in (var &rest rest)
   (do-list-stage-format (arg rest)
 	 (:first (:format "(~a == ~a" var arg))
-	 (:main  (:format " || ~a != ~a" var arg))
+    (:main  (:format " || ~a == ~a" var arg))
 	 (:end   (:format ")"))))
 
 (defun bpftrace-if (cond then &optional else)
@@ -125,6 +140,10 @@
 	 (:main  (:format " || ~a" e))
 	 (:end   (:format ")"))))
 
+;;以下是一套bpftrace的S表达式DSL
+;;可以像写lisp代码那样编写bpftrace，但是注意:if,:cond由于最终被翻译成bpftrace代码,
+;;所以它没有返回值，虽然可以表面像lisp，实际上是bpftrace
+;;示例请看example/example-bpftrace-dsl.lisp
 (defmacro bpftrace-code (&body body)
   `(macrolet ((:printf (idx &body kvlist) `(bpftrace-printf ,idx ,@kvlist))
 				  (:progn (&body body)        `(bpftrace-progn ,@body))
@@ -132,7 +151,7 @@
 				  (:not-in (var &body rest) `(bpftrace-not-in ,var ,@rest))
 				  (:in (var &body rest) `(bpftrace-in ,var ,@rest))
 				  (:= (&body strings) `(bpftrace-= ,@strings))
-				  (:/= (&body strings) `(bpftrace-/= ,@strings))
+				  ;;(:/= (&body strings) `(bpftrace-/= ,@strings)) 没做好
 				  (:if (cond then &optional else) `(bpftrace-if ,cond ,then ,else))
 				  (:cond (&body sentence) `(bpftrace-cond ,@sentence))
 				  (:and (&body exprs) `(bpftrace-and ,@exprs))

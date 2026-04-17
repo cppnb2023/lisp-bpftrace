@@ -50,7 +50,7 @@
 
 ;; 2. 定义规则：当监控器收到数据时，打印 ppid 和 pid
 (defparameter *my-rule*
-  (make-rule ((*my-monitor*))
+  (make-rule (nil (*my-monitor*))
              (monitor)
              (with-monitor (monitor)
                (format t "ppid: ~a  pid: ~a~%"
@@ -100,8 +100,10 @@ ppid: 1234  pid: 5678
 
 - **创建规则**：`(make-rule ((monitor1 ...) (monitor2 ...)) (monitor) (body))`  
   参数列表中的每个 `(monitor)` 表示当该监控器收到数据时，执行后面的 `body`。  
-  未指定自定义 body 时使用默认 body（即 `(solve rule)`）。
-- 注意可以在规则上定义规则进行嵌套，而且没有写规则成环限制。
+  未指定自定义 body 时使用默认 body。
+- **注意**：可以在规则上定义规则进行嵌套，而且没有写规则成环限制。
+- 给规则写规则在执行时，探针会触发所有相关的规则，触发方式类似于图的深度搜索
+- 尽量不要成环，除非你知道你在干什么，以后更新成环检测但不强制
 - **安装/卸载**：`(install-rule rule)` 将规则的回调注册到每个监控器的 `hook-hash` 中；`(uninstall-rule rule)` 则移除。
 - **规则触发**：当监控器执行 `solve` 时，会调用所有已注册的回调，并将监控器实例作为参数传入。
 
@@ -111,7 +113,11 @@ ppid: 1234  pid: 5678
 - **`:probe`**：生成 `probe { ... }` 块。
 - **`:progn`**：生成 `{ ... }` 块，自动添加分号。
 - **`bpftrace-code`**：顶层宏，内部可使用 `:printf`、`:probe`、`:progn`。
-- 由于输出字符串面临性能，转义，解析问题，所以不推荐直接输出字符串（代码已经注释）。
+- **`:=`**: 生成bpftrace `==`表达式
+- **`:if`**: 生成bpftrace `if`语句
+- **`:cond`**: 根据`:if`生成多分支语句
+- **`:not-in`**: 判断一个参数是否不在后边所有的参数里的任意一个
+- **`:in`**: 判断一个参数是否在后边所有参数里的某一个
 
 示例：
 ```lisp
@@ -122,7 +128,7 @@ ppid: 1234  pid: 5678
 
 生成：
 ```
-kprobe:do_nanosleep{printf("(:hash 1 arg1:%ld arg2:%u)\n", arg1, arg2);}
+kprobe:do_nanosleep{printf("(:hash 1 :arg1 %ld :arg2 %u)\n", arg1, arg2);}
 ```
 
 ### 4. 进程管理
@@ -158,7 +164,7 @@ kprobe:do_nanosleep{printf("(:hash 1 arg1:%ld arg2:%u)\n", arg1, arg2);}
 
 ### 包 `rule`
 - **类**：`rule`
-- **宏**：`make-rule ((&rest monitor-or-rules) &body default-rule)` – 创建规则
+- **宏**：`make-rule (other-initial (&rest monitor-or-rules) &body default-rule)` – 创建规则
 - **函数**：`install-rule`、`uninstall-rule`
 
 ## 注意事项

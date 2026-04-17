@@ -15,7 +15,8 @@
 (defmethod generate-bpftrace-code ((monitor monitor-base))
   (bpftrace-code
 	(:printf (get-idx monitor)
-				 :u32 "ppid" :u32 "pid" :u32 "tid"  :u64 "nsecs")))
+				:str "comm"
+				:u32 "ppid" :u32 "pid" :u32 "tid"  :u64 "nsecs")))
 
 (defmethod get-member ((monitor monitor-base) keyword)
   (gethash keyword (get-member-hash monitor)))
@@ -46,10 +47,14 @@
 
 (defmacro make-monitor (class-name probe)
   `(macrolet ((:filter (probe filter)
-					 (format nil "~a /~a/" probe filter))
+					 `(format nil "~a /~a/" ,probe ,filter))
 				  (:kprobe (kernel-func)
-					 (format nil "kprobe:~a" kernel-func))
+					 `(format nil "kprobe:~a" ,kernel-func))
 				  (:tracepoint (type event)
-					 (format nil "tracepoint:~a:~a" type event)))
+					 `(format nil "tracepoint:~a:~a" ,type ,event))
+				  (:not-in (var &body rest) `(bpftrace-not-in ,var ,@rest))
+				  (:in (var &body rest) `(bpftrace-in ,var ,@rest))
+				  (:bstr (string)
+					 `(format nil "\"~a\"" ,string)))
 	  (make-instance ,class-name :probe ,probe)))
 

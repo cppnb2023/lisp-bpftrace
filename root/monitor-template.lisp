@@ -45,14 +45,12 @@
      (generate-bpftrace-code monitor))))
 
 (defun solve-infomation (stream)
-  (do ((line (read-line stream) (read-line stream))) (nil)
-	 (with-input-from-string (stream line)
-		(let ((plist (read stream)))
-		  (aif2 (gethash (getf plist :hash) *monitor-hash*)
-				  (progn
-					 (read-information it plist)
-					 (solve it))
-				  (error (format nil "read error: not cognizance ~a" idx)))))))
+  (do ((plist (read stream) (read stream))) (nil)
+	 (aif2 (gethash (getf plist :hash) *monitor-hash*)
+			 (progn
+				(read-information it plist)
+				(solve it))
+			 (error (format nil "read error: not cognizance ~a" idx)))))
 
 (defun exec-monitors (file)
   (forever
@@ -64,6 +62,6 @@
 (defmacro with-monitor ((monitor) &body body)
   (let ((monitor-sym (gensym "monitor")))
 	 `(let ((,monitor-sym ,monitor))
-		 (flet ((get-member (keyword)
-					 (get-member ,monitor-sym keyword)))
+		 (macrolet ((:get-member (keyword)
+						  `(get-member ,',monitor-sym ,keyword)))
 			,@body))))

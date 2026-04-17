@@ -1,7 +1,7 @@
 (defpackage :rule
   (:use :cl :generic :bpftrace-dsl :monitor-template)
   (:export :rule :install-rule :uninstall-rule :solve :make-rule
-			  :other))
+			  :get-other :with-rule))
 
 (in-package :rule)
 
@@ -9,7 +9,7 @@
   ((monitors :type list :accessor get-monitors :initarg :monitors)
 	(rules :type list :accessor get-rules :initarg :rules)
 	(hook-hash :initform (make-hash-table) :reader get-hook-hash)
-	(other :type list :initform nil :accessor get-other)))
+	(other :type list :initform nil :accessor get-other :initarg :other)))
 
 (defgeneric install-rule (rule))
 (defgeneric uninstall-rule (rule))
@@ -18,7 +18,19 @@
   (loop for v being the hash-values in (get-hook-hash rule) do
 		  (funcall v rule)))
 
-(defmacro make-rule ((&rest monitor-or-rules) &body default-rule)
+(defmacro with-rule ((rule) &body body)
+  `(macrolet ((:get-other ()
+					 `(get-other ,',rule)))
+	  ,@body))
+
+;;语法格式：
+;;(make-rule (other-initial (monitor-or-rule1 rule1) (monitor-or-rule2 rule2) ...) default-rule)
+;;其中other-initial返回一个链表，存入新构造的rule中，方便下文使用
+;;rule1 rule2 ... 和 default-rule格式一样，第一个是参数列表，只有一个参数用于传当前的monitor-or-rule，其余为函数体
+;;rule1 rule2 ...可以理解为特化的钩子，default-rule是通用规则
+;;示例请看example-rule.lisp
+(defmacro make-rule ((other-initial &rest monitor-or-rules) &body default-rule)
+  (unless default-rule (error "必须有默认规则"))
   (let* ((tmp-sym (gensym "tmp"))
 			(monitors (loop for mr in monitor-or-rules collect
 								 (car mr)))
@@ -29,7 +41,8 @@
 		 (setf ,tmp-sym
 				 (make-instance 'rule
 									 :monitors (list ,@monitors)
-									 :rules    (list ,@rules))))))
+									 :rules    (list ,@rules)
+									 :other    ,other-initial)))))
 
 (defmethod install-rule ((rule rule))
   (loop for m in (get-monitors rule)
