@@ -1,5 +1,5 @@
 (defpackage :monitor-template
-  (:use :cl #:generic #:bpftrace-dsl)
+  (:use :cl :base-tools :bpftrace-dsl)
   (:import-from :sb-ext :run-program :process-output)
   (:export :monitor-template :get-probe :get-hook-hash :get-member
 			  :solve :write-monitor :generate-bpftrace-code

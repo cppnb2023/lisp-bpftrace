@@ -1,8 +1,9 @@
-(defpackage :main
+;;下文是一个即可以检测打开文件，又能检测命令执行的规则
+(defpackage :example-rule
   (:use :cl :generic :monitor-base :process-information :bpftrace-dsl :monitor-template
         :rule))
 
-(in-package :main)
+(in-package :example-rule)
 
 (defparameter *my-monitor* (make-monitor 'monitor-base
                                          (:filter (:tracepoint "syscalls" "sys_enter_openat")
@@ -32,11 +33,3 @@
                                    (setf (gethash2 comm *my-rule*) 1)))))
                (monitor))))
 
-(defun main ()
-  (install-rule *my-rule*)
-  (with-open-file (stream "/tmp/a.bt" :direction :output :if-exists :supersede)
-    (add-monitors stream *my-monitor* *my-monitor2*))
-  (exec-monitors "/tmp/a.bt")
-  )
-
-(main)
