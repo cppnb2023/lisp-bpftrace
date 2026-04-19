@@ -3,8 +3,7 @@
   (:use :cl)
   (:export :aif :awhen :aunless :aif2 :awhen2 :aunless2 :it :last1
            :singlep :array-last :or= :or/= :or-char= :or-char/= :or-eq
-           :strcat :ensure-symbol :forever :plist-into-hash 
-           :with-stream-format))
+           :strcat :ensure-symbol :forever :with-stream-format))
 
 (in-package :generic)
 
@@ -79,13 +78,6 @@
 (defun ensure-symbol (var symbol)
   "确保返回符号，var不是符号返回symbol"
   (if (symbolp var) var symbol))
-
-(defun plist-into-hash (hash plist)
-  "将plist写入hash-table中"
-  (when (= (mod (length plist) 2) 1)
-    (error "plist have odd elements"))
-  (do-plist-stage (k v plist)
-    (:main (setf (gethash k hash) v))))
 
 (defmacro with-stream-format ((stream-sym) &body body)
   "使用:format将多个格式化字符串拼接返回"

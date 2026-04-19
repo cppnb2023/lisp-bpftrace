@@ -50,7 +50,7 @@
 
 ;; 2. 定义规则：当监控器收到数据时，打印 ppid 和 pid
 (defparameter *my-rule*
-  (make-rule (nil (*my-monitor*))
+  (make-rule ((*my-monitor*))
              (monitor)
              (with-monitor (monitor)
                (format t "ppid: ~a  pid: ~a~%"
@@ -164,7 +164,7 @@ kprobe:do_nanosleep{printf("(:hash 1 :arg1 %ld :arg2 %u)\n", arg1, arg2);}
 
 ### 包 `rule`
 - **类**：`rule`
-- **宏**：`make-rule (other-initial (&rest monitor-or-rules) &body default-rule)` – 创建规则
+- **宏**：`make-rule ((&rest monitor-or-rules) &body default-rule)` – 创建规则
 - **函数**：`install-rule`、`uninstall-rule`
 
 ## 注意事项

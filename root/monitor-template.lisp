@@ -17,6 +17,7 @@
 (defgeneric get-probe (monitor))
 (defgeneric get-hook-hash (monitor))
 (defgeneric get-member (monitor key))
+(defgeneric (setf get-member) (val monitor key))
 (defgeneric solve (monitor))
 
 (defgeneric write-monitor (monitor stream))

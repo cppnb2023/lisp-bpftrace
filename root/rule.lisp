@@ -9,7 +9,7 @@
   ((monitors :type list :accessor get-monitors :initarg :monitors)
    (rules :type list :accessor get-rules :initarg :rules)
    (hook-hash :initform (make-hash-table) :reader get-hook-hash)
-   (other :type list :initform nil :accessor get-other :initarg :other)))
+   (member-hash :initform (make-hash-table))))
 
 (defgeneric install-rule (rule))
 (defgeneric uninstall-rule (rule))
@@ -23,13 +23,18 @@
                 `(get-other ,',rule)))
      ,@body))
 
+(defmethod get-member ((rule rule) key)
+  (gethash key (slot-value rule 'member-hash)))
+
+(defmethod (setf get-member) (val (rule rule) key)
+  (setf (gethash key (slot-value rule 'member-hash)) val))
+
 ;;语法格式：
-;;(make-rule (other-initial (monitor-or-rule1 rule1) (monitor-or-rule2 rule2) ...) default-rule)
-;;其中other-initial返回一个链表，存入新构造的rule中，方便下文使用
+;;(make-rule ((monitor-or-rule1 rule1) (monitor-or-rule2 rule2) ...) default-rule)
 ;;rule1 rule2 ... 和 default-rule格式一样，第一个是参数列表，只有一个参数用于传当前的monitor-or-rule，其余为函数体
 ;;rule1 rule2 ...可以理解为特化的钩子，default-rule是通用规则
 ;;示例请看example/rule.lisp
-(defmacro make-rule ((other-initial &rest monitor-or-rules) &body default-rule)
+(defmacro make-rule ((&rest monitor-or-rules) &body default-rule)
   (unless default-rule (error "必须有默认规则"))
   (let* ((tmp-sym (gensym "tmp"))
          (monitors (loop for mr in monitor-or-rules collect
@@ -41,8 +46,7 @@
        (setf ,tmp-sym
              (make-instance 'rule
                             :monitors (list ,@monitors)
-                            :rules    (list ,@rules)
-                            :other    ,other-initial)))))
+                            :rules    (list ,@rules))))))
 
 (defmethod install-rule ((rule rule))
   (loop for m in (get-monitors rule)

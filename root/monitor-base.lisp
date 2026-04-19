@@ -21,6 +21,9 @@
 (defmethod get-member ((monitor monitor-base) keyword)
   (gethash keyword (get-member-hash monitor)))
 
+(defmethod (setf get-member) (val (monitor monitor-base) keyword)
+  (setf (gethash keyword (get-member-hash monitor)) val))
+
 (defmethod read-information ((monitor monitor-base) plist)
   (plist-into-hash (get-member-hash monitor) plist))
 
