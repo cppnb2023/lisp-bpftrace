@@ -9,7 +9,7 @@
   ((monitors :type list :accessor get-monitors :initarg :monitors)
    (rules :type list :accessor get-rules :initarg :rules)
    (hook-hash :initform (make-hash-table) :reader get-hook-hash)
-   (member-hash :initform (make-hash-table))))
+   (member-hash :initform (make-hash-table :test #'equal))))
 
 (defgeneric install-rule (rule))
 (defgeneric uninstall-rule (rule))

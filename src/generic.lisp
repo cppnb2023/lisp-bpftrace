@@ -3,7 +3,8 @@
   (:use :cl)
   (:export :aif :awhen :aunless :aif2 :awhen2 :aunless2 :it :last1
            :singlep :array-last :or= :or/= :or-char= :or-char/= :or-eq
-           :strcat :ensure-symbol :forever :with-stream-format))
+           :strcat :ensure-symbol :forever :with-stream-format
+           :ensure-integer :logior-setf :ensure-logior-setf))
 
 (in-package :generic)
 
@@ -78,6 +79,15 @@
 (defun ensure-symbol (var symbol)
   "确保返回符号，var不是符号返回symbol"
   (if (symbolp var) var symbol))
+
+(defun ensure-integer (var number)
+  (if (integerp var) var number))
+
+(defmacro logior-setf (var num)
+  `(setf ,var (logior ,var ,num)))
+
+(defmacro ensure-logior-setf (var num)
+  `(setf ,var (logior (ensure-integer ,var 0) ,num)))
 
 (defmacro with-stream-format ((stream-sym) &body body)
   "使用:format将多个格式化字符串拼接返回"

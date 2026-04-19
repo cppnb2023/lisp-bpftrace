@@ -1,6 +1,6 @@
 (defpackage :monitor-template
   (:use :cl :base-tools :bpftrace-dsl)
-  (:import-from :sb-ext :run-program :process-output)
+  (:import-from :uiop :launch-program :process-info-output)
   (:export :monitor-template :get-probe :get-hook-hash :get-member
 			  :solve :write-monitor :generate-bpftrace-code
 			  :read-information :get-idx :add-monitors :exec-monitors
@@ -47,22 +47,21 @@
 
 (defun solve-infomation (stream)
   (do ((plist (read stream) (read stream))) (nil)
-	 (aif2 (gethash (getf plist :hash) *monitor-hash*)
-			 (progn
-				(read-information it plist)
-				(solve it))
-			 (error (format nil "read error: not cognizance ~a" idx)))))
+    (aif2 (gethash (getf plist :hash) *monitor-hash*)
+          (progn
+            (read-information it plist)
+            (solve it))
+          (error (format nil "read error: not cognizance ~a" idx)))))
 
 (defun exec-monitors (file)
   (forever
-	(let* ((process (run-program "/usr/bin/bpftrace" (list file) :wait nil :output :stream))
-			 (output (process-output process)))
-	  (format t "~a~%" (read-line output))
-	  (solve-infomation output))))
+   (let* ((process (launch-program (list "bpftrace" file) :output :stream))
+          (output (process-info-output process)))
+     (solve-infomation output))))
 
 (defmacro with-monitor ((monitor) &body body)
   (let ((monitor-sym (gensym "monitor")))
-	 `(let ((,monitor-sym ,monitor))
-		 (macrolet ((:get-member (keyword)
-						  `(get-member ,',monitor-sym ,keyword)))
-			,@body))))
+    `(let ((,monitor-sym ,monitor))
+       (macrolet ((:get-member (keyword)
+                    `(get-member ,',monitor-sym ,keyword)))
+         ,@body))))

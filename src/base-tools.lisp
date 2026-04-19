@@ -5,7 +5,8 @@
    :aif :awhen :aunless :aif2 :awhen2 :aunless2 :it :last1
    :singlep :array-last :or= :and= :or/=
    :and/= :or-char= :or-char/= :and-char= :and-char/= :strcat
-   :ensure-symbol :forever  :plist-into-hash
+   :ensure-symbol :forever  :plist-into-hash :ensure-integer :logior-setf
+   :ensure-logior-setf
    ;;do-varient
    :do-stage :do-stage* :do-list-stage :do-times-stage :do-plist-stage
    :do-stage-format :do-stage-format* :do-list-stage-format
