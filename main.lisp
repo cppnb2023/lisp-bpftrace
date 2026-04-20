@@ -14,21 +14,17 @@
                 (:tracepoint "syscalls" "sys_enter_execve")))
 
 (defparameter *my-rule*
-  (make-rule ((*my-monitor*
-               (monitor)
-               (with-monitor (monitor)
-                 (let ((comm (:get-member :comm)))
-                   (when (= (ensure-logior-setf (get-member *my-rule* comm) #x1) 3)
-                     (format t "~a即打开文件，又执行命令~%" comm)
-                     (setf (get-member *my-rule* comm) 0)))))
-              (*my-monitor2*
-               (monitor)
-               (with-monitor (monitor)
-                 (let ((comm (:get-member :comm)))
+  (make-rule ((*my-monitor* (monitor)
+                (let ((comm (get-member monitor :comm)))
+                  (when (= (ensure-logior-setf (get-member *my-rule* comm) #x1) 3)
+                    (format t "~a即打开文件，又执行命令~%" comm)
+                    (setf (get-member *my-rule* comm) 0))))
+               (*my-monitor2* (monitor)
+                 (let ((comm (get-member monitor :comm)))
                    (when (= (ensure-logior-setf (get-member *my-rule* comm) #x2) 3)
                      (format t "~a即打开文件，又执行命令~%" comm)
-                     (setf (get-member *my-rule* comm) 0))))))
-             (monitor)))
+                     (setf (get-member *my-rule* comm) 0)))))
+    (monitor)))
 
 (defun main ()
   (install-rule *my-rule*)

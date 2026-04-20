@@ -4,7 +4,7 @@
   (:export :monitor-template :get-probe :get-hook-hash :get-member
 			  :solve :write-monitor :generate-bpftrace-code
 			  :read-information :get-idx :add-monitors :exec-monitors
-			  :with-monitor))
+			  :with-member-bindings :with-member-let))
 
 (in-package :monitor-template)
 
@@ -59,9 +59,17 @@
           (output (process-info-output process)))
      (solve-infomation output))))
 
-(defmacro with-monitor ((monitor) &body body)
+(defmacro with-member-bindings (bindings monitor &body body)
   (let ((monitor-sym (gensym "monitor")))
     `(let ((,monitor-sym ,monitor))
-       (macrolet ((:get-member (keyword)
-                    `(get-member ,',monitor-sym ,keyword)))
+       (symbol-macrolet
+           ,@(loop for (v k) in bindings collect
+                   `(,v (get-member ,monitor-sym ,k)))
          ,@body))))
+
+(defmacro with-member-let (bindings monitor &body body)
+  (let ((monitor-sym (gensym "monitor")))
+    `(let* ((,monitor-sym ,monitor)
+            ,@(loop for (v k) in bindings collect
+                    `(,v (get-member ,monitor-sym ,k))))
+       ,@body)))
