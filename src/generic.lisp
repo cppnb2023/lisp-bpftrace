@@ -4,7 +4,8 @@
   (:export :aif :awhen :aunless :aif2 :awhen2 :aunless2 :it :last1
            :singlep :array-last :or= :or/= :or-char= :or-char/= :or-eq
            :strcat :ensure-symbol :forever :with-stream-format
-           :ensure-integer :logior-setf :ensure-logior-setf))
+           :ensure-integer :logior-setf :ensure-logior-setf
+           :with-collect))
 
 (in-package :generic)
 
@@ -89,10 +90,17 @@
 (defmacro ensure-logior-setf (var num)
   `(setf ,var (logior (ensure-integer ,var 0) ,num)))
 
-(defmacro with-stream-format ((stream-sym) &body body)
+(defmacro with-stream-format ((&optional (stream-sym (gensym "sstream"))) &body body)
   "使用:format将多个格式化字符串拼接返回"
   `(with-output-to-string (,stream-sym)
      (macrolet ((:format (string &body args)
                   (append (list 'format ',stream-sym string) args)))
        ,@body)))
+
+(defmacro with-collect ((&optional (lst (gensym "lst"))) &body body)
+  `(let ((,lst nil))
+     (macrolet ((:collect (element)
+                  (list 'push element ',lst)))
+       ,@body
+       (nreverse ,lst))))
 

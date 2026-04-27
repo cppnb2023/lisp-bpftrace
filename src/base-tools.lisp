@@ -11,7 +11,7 @@
    :do-stage :do-stage* :do-list-stage :do-times-stage :do-plist-stage
    :do-stage-format :do-stage-format* :do-list-stage-format
    :do-times-stage-format :do-plist-stage-format :do-tuple-stage
-   :do-tuple-stage-format
+   :do-tuple-stage-format :do-circular
    ;;hash-op
    :plist-into-hash :with-hash-bindings))
 
