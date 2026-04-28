@@ -30,7 +30,6 @@
   (install-rule *my-rule*)
   (with-open-file (stream "/tmp/a.bt" :direction :output :if-exists :supersede)
     (add-monitors stream *my-monitor* *my-monitor2*))
-  (exec-monitors "/tmp/a.bt")
-  )
+  (exec-monitors "/tmp/a.bt"))
 
 (main)
