@@ -5,7 +5,7 @@
            :singlep :array-last :or= :or/= :or-char= :or-char/= :or-eq
            :strcat :ensure-symbol :forever :with-stream-format
            :ensure-integer :logior-setf :ensure-logior-setf
-           :with-collect))
+           :with-collect :with-wrappers :mvsetq :mvsetf :mvpsetf))
 
 (in-package :generic)
 
@@ -103,4 +103,38 @@
                   (list 'push element ',lst)))
        ,@body
        (nreverse ,lst))))
+
+(defmacro with-wrappers (wrappers &body body)
+  (reduce #'(lambda (a b)
+              (append a (list b)))
+          wrappers
+          :initial-value `(progn ,@body)
+          :from-end t))
+
+(defmacro mvsetq (vars values)
+  (let ((bindings
+         (loop for v in vars collect
+               (gensym (string v)))))
+    `(multiple-value-bind ,bindings ,values
+       ,@(loop for v in vars
+               for b in bindings collect
+               `(setq ,v ,b)))))
+
+(defmacro mvsetf (vars values)
+  (let ((bindings
+         (loop for v in vars collect
+               (gensym (string v)))))
+    `(multiple-value-bind ,bindings ,values
+       ,@(loop for v in vars
+               for b in bindings collect
+               `(setf ,v ,b)))))
+
+(defmacro mvpsetf (vars values)
+  (let ((bindings
+         (loop for v in vars collect
+               (gensym (string v)))))
+    `(multiple-value-bind ,bindings ,values
+       (psetf ,@(loop for v in vars
+                      for b in bindings append
+                      `(,v ,b))))))
 

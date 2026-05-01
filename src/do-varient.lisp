@@ -1,5 +1,5 @@
 (defpackage :do-varient
-  (:use :cl :generic)
+  (:use :cl :generic :parse-code)
   (:export :do-stage :do-stage* :do-list-stage :do-times-stage :do-plist-stage
            :do-stage-format :do-stage-format* :do-list-stage-format
            :do-times-stage-format :do-plist-stage-format :do-tuple-stage
@@ -178,108 +178,118 @@
      (do-circular-stage (,iter ,beg ,end ,limit)
        ,@body)))
 
-;;测试阶段
+;;测试阶段 1.1
 (defmacro do-complex ((&rest accumulation) (&rest styles) &body body)
   (check-stages body)
-  (let (bindings
-        beg-codes
-        conditions
-        next-codes
-        macro-bindings
-        result-codes
-        (loop-sym (gensym "loop"))
+  (let ((loop-sym (gensym "loop"))
         (firstp-sym (gensym "firstp")))
-    (macrolet ((append-setf (var list)
-                 `(setf ,var (append ,var ,list)))
-               (with-parse ((destruct-lst lst gensyms) &body body)
-                 `(flet ((:bind  (&rest codes)
-                           (append-setf bindings   codes))
-                         (:beg   (&rest codes)
-                           (append-setf beg-codes  codes))
-                         (:judge (&rest codes)
-                           (append-setf conditions codes))
-                         (:next  (&rest codes)
-                           (append-setf next-codes codes))
-                         (:macro (&rest codes)
-                           (append-setf macro-bindings codes))
-                         (:res   (&rest codes)
-                           (append-setf result-codes   codes)))
-                    (destructuring-bind ,destruct-lst ,lst
-                      (let ,(loop for sym in gensyms collect
-                                  `(,sym (gensym ,(string sym))))
-                        ,@body)))))
-      (dolist (style styles)
-        (destructuring-bind (style-name &rest parameters) style
-          (ecase style-name
-            (:times
-             (with-parse ((iter limit) parameters (limit-sym))
-               (:bind  `(,limit-sym ,limit) `(,iter 0))
-               (:judge `(= ,iter ,limit-sym))
-               (:next  `(setf ,iter (1+ ,iter)))))
-            (:list
-             (with-parse ((iter list) parameters (list-sym))
-               (:bind  `(,list-sym ,list) iter)
-               (:beg   `(setf ,iter (car ,list-sym)))
-               (:judge `(not ,list-sym))
-               (:next  `(setf ,list-sym (cdr ,list-sym)))))
-            (:plist
-             (with-parse ((key val plist) parameters (plist-sym))
-               (:bind  `(,plist-sym ,plist) key val)
-               (:beg   `(setf ,key (car  ,plist-sym))
-                       `(setf ,val (cadr ,plist-sym)))
-               (:judge `(not (cdr ,plist-sym)))
-               (:next  `(setf ,plist-sym (cddr ,plist-sym)))))
-            (:tuple
-             (with-parse ((elements list) parameters (list-sym tmp-sym))
-               (:bind `(,list-sym ,list) tmp-sym)
-               (:beg  `(setf ,tmp-sym ,list-sym))
-               (do-list-stage (e elements)
-                 (:first (:bind e) (:beg `(setf ,e (car ,tmp-sym))))
-                 (:main  (:bind e) (:beg `(setf ,tmp-sym (cdr ,tmp-sym)
-                                                ,e (car ,tmp-sym)))))
-               (:judge `(not ,tmp-sym))
-               (:next  `(setf ,list-sym (cdr ,list-sym)))))
-            (:circular
-             (with-parse ((iter beg end limit) parameters (end-sym limit-sym))
-               (:bind  `(,end-sym ,end) `(,limit-sym ,limit) `(,iter ,beg))
-               (:next  `(setf ,iter (mod (1+ ,iter) ,limit-sym)))
-               (:judge `(= ,iter ,end-sym))))
-            (:do*
-             (with-parse ((var init step) parameters ())
-               (:bind `(,var ,init))
-               (:next `(setf ,var ,step)))))))
-      (dolist (acc accumulation)
-        (destructuring-bind (type &rest parameters) acc
-          (ecase type
-            (:collect
-             (with-parse ((mname) parameters (collect-sym))
-               (:bind  collect-sym)
-               (:macro `(,mname (e) `(push ,e ,',collect-sym)))
-               (:res   `(nreverse ,collect-sym))))
-            (:format
-             (with-parse ((mname) parameters (stream))
-               (:bind  `(,stream (make-string-output-stream)))
-               (:macro `(,mname (str &body parameters)
-                                `(format ,',stream ,str ,@parameters)))
-               (:res   `(get-output-stream-string ,stream))))
-            (:append
-             (with-parse ((mname) parameters (append-sym))
-               (:bind  append-sym)
-               (:macro `(,mname (list)
-                                `(setf ,',append-sym (append ,',append-sym ,list))))
-               (:res  append-sym))))))
-      (multiple-value-bind (first main end) (parse-stages body)
-        (when first (append-setf bindings `((,firstp-sym t))))
-        `(let* ,bindings
-           (macrolet ,macro-bindings
-             (block nil
-               (tagbody
-                  ,loop-sym
-                  ,@beg-codes
-                  (unless (or ,@conditions)
-                    ,(make-stage-code first main firstp-sym)
-                    ,@next-codes
-                    (go ,loop-sym))
-                  ,@end
-                  (return (values ,@result-codes))))))))))
+    (macrolet ((with-parse ((destruct-lst lst gensyms) &body body)
+                 `(destructuring-bind ,destruct-lst ,lst
+                    (let ,(loop for sym in gensyms collect
+                                `(,sym (gensym ,(string sym))))
+                      ,@body))))
+      (with-collect-codes ((:bind  bindings)     (:beg   beg-codes)
+                           (:judge conditions)   (:next  next-codes)
+                           (:wrap  wrappers)     (:macro macro-bindings)
+                           (:res   result-codes) (:init  initial-codes))
+        (dolist (style styles)
+          (destructuring-bind (style-name &rest parameters) style
+            (ecase style-name
+              (:times
+               (with-parse ((iter limit) parameters (limit-sym))
+                 (:bind  `(,limit-sym ,limit) `(,iter 0))
+                 (:judge `(= ,iter ,limit-sym))
+                 (:next  `(setf ,iter (1+ ,iter)))))
+              (:list
+               (with-parse ((iter list) parameters (list-sym))
+                 (:bind  `(,list-sym ,list))
+                 (:next  `(setf ,list-sym (cdr ,list-sym)))
+                 (if (listp iter)
+                     (progn
+                       (:wrap  `(destructuring-bind ,iter (car ,list-sym)))
+                       (:judge `(not ,list-sym)))
+                     (progn 
+                       (:bind iter)
+                       (:beg   `(setf ,iter (car ,list-sym)))
+                       (:judge `(not ,list-sym))))))
+              (:plist
+               (with-parse ((key val plist) parameters (plist-sym))
+                 (:bind  `(,plist-sym ,plist) key val)
+                 (:beg   `(setf ,key (car  ,plist-sym))
+                         `(setf ,val (cadr ,plist-sym)))
+                 (:judge `(not (cdr ,plist-sym)))
+                 (:next  `(setf ,plist-sym (cddr ,plist-sym)))))
+              (:tuple
+               (with-parse ((elements list) parameters (list-sym tmp-sym))
+                 (:bind `(,list-sym ,list) tmp-sym)
+                 (:beg  `(setf ,tmp-sym ,list-sym))
+                 (do-list-stage (e elements)
+                   (:first (:bind e) (:beg `(setf ,e (car ,tmp-sym))))
+                   (:main  (:bind e) (:beg `(setf ,tmp-sym (cdr ,tmp-sym)
+                                                  ,e (car ,tmp-sym)))))
+                 (:judge `(not ,tmp-sym))
+                 (:next  `(setf ,list-sym (cdr ,list-sym)))))
+              (:circular
+               (with-parse ((iter beg end limit) parameters (end-sym limit-sym))
+                 (:bind  `(,end-sym ,end) `(,limit-sym ,limit) `(,iter ,beg))
+                 (:next  `(setf ,iter (mod (1+ ,iter) ,limit-sym)))
+                 (:judge `(= ,iter ,end-sym))))
+              (:do*
+               (destructuring-bind (parameters &optional cond) parameters
+                 (dolist (p parameters)
+                   (with-parse ((var &optional init step) p ())
+                     (:bind `(,var ,init))
+                     (when step
+                       (:next `(setf ,var ,step)))))
+                 (with-parse ((&rest cond) cond ())
+                   (when cond
+                     (:judge cond)))))
+              (:mvdo*
+               (destructuring-bind (parameters &optional cond) parameters
+                 (dolist (p parameters)
+                   (with-parse ((vars &optional init step) p ())
+                     (dolist (v vars)
+                       (:bind v))
+                     (:init `(mvsetq ,vars ,init))
+                     (when step
+                       (:next `(mvsetq ,vars ,step)))))
+                 (with-parse ((&rest cond) cond ())
+                   (when cond
+                     (:judge cond))))))))
+        (dolist (acc accumulation)
+          (destructuring-bind (type &rest parameters) acc
+            (ecase type
+              (:collect
+               (with-parse ((mname) parameters (collect-sym))
+                 (:bind  collect-sym)
+                 (:macro `(,mname (e) `(push ,e ,',collect-sym)))
+                 (:res   `(nreverse ,collect-sym))))
+              (:format
+               (with-parse ((mname) parameters (stream))
+                 (:bind  `(,stream (make-string-output-stream)))
+                 (:macro `(,mname (str &body parameters)
+                                  `(format ,',stream ,str ,@parameters)))
+                 (:res   `(get-output-stream-string ,stream))))
+              (:append
+               (with-parse ((mname) parameters (append-sym))
+                 (:bind  append-sym)
+                 (:macro `(,mname (list)
+                                  `(setf ,',append-sym (append ,',append-sym ,list))))
+                 (:res  append-sym))))))
+        (multiple-value-bind (first main end) (parse-stages body)
+          (when first (append-setf bindings `((,firstp-sym t))))
+          `(let* ,bindings
+             ,@initial-codes
+             (macrolet ,macro-bindings
+               (block nil
+                 (tagbody
+                    ,loop-sym
+                    ,@beg-codes
+                    (unless (or ,@conditions)
+                      (with-wrappers ,wrappers
+                        ,(make-stage-code first main firstp-sym))
+                      ,@next-codes
+                      (go ,loop-sym))
+                    ,@end
+                    (return (values ,@result-codes)))))))))))
 
