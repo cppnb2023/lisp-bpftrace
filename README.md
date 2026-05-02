@@ -5,7 +5,7 @@
 ## 功能特性
 
 - **DSL 构造 bpftrace 脚本**  
-  通过 Lisp 宏和函数生成 `printf` 格式的 bpftrace 代码，支持 `:printf`、`:probe`、`:progn` 等语义。
+  通过 Lisp 宏和函数生成 `printf` 格式的 bpftrace 代码，支持 `:printf`、`:probe`、`:progn` 、`:if`、`:cond`等语义。
 
 - **监控类（monitor）**  
   基于 `monitor-base` 或自定义子类定义监控器，每个监控器拥有唯一的 `idx`，负责：
@@ -20,11 +20,12 @@
   `exec-monitors` 启动 bpftrace 子进程，实时读取输出并分发给对应的监控器，自动调用规则。
 
 - **辅助工具**  
-  通用宏（`aif`、`awhen`、`do-stage` 等）、哈希表/列表处理、字符串格式化等。
+  通用宏（`aif`、`awhen` 等）、哈希表/列表处理、字符串格式化等。
+  遍历宏（`do-complex`），目前支持遍历list、plist，限制次数、滑动窗口还可插入do*原生语法，多返回值的遍历:mvdo*，支持汇聚:collect、:append、:format（组合字符串），可进行多个汇聚此时会按顺序返回多个值，强烈推荐使用此宏进行拓展，其他非标准的控制流不再更新。
 
 ## 系统要求
 
-- Common Lisp 实现：**SBCL**（代码中使用了 `sb-ext:run-program`）
+- Common Lisp 实现：**SBCL**（代码暂时没有特定编译器实现，理论上其他的也行）
 - **bpftrace** 命令（需在 `PATH` 中）
 - Linux 内核支持 BPF（通常需要 root 权限运行生成的脚本）
 
@@ -52,10 +53,11 @@
 (defparameter *my-rule*
   (make-rule ((*my-monitor*))
              (monitor)
-             (with-monitor (monitor)
-               (format t "ppid: ~a  pid: ~a~%"
-                       (get-member :ppid)
-                       (get-member :pid)))))
+				 (format t "ppid: ~a  pid: ~a~%"
+                     (get-member monitor :ppid)
+                     (get-member monitor :pid))))
+;;由于with-monitor绑定get-member宏会导致轻微的污染影响逻辑已被删除
+;;如果需要简化提取操作请使用with-member-bindings或with-member-let
 
 ;; 3. 安装规则、生成 bpftrace 脚本、执行监控
 (defun main ()
@@ -141,7 +143,7 @@ kprobe:do_nanosleep{printf("(:hash 1 :arg1 %ld :arg2 %u)\n", arg1, arg2);}
 ### 包 `generic`
 提供通用工具宏/函数：
 - `aif`, `awhen`, `aunless` – 带有 `it` 变量的条件宏
-- `do-stage`, `do-list-stage`, `do-times-stage`, `do-plist-stage` – 流程控制
+- `do-stage`, `do-list-stage`, `do-times-stage`, `do-plist-stage` – 流程控制，注意这些已经不再维护了，因为用这些组合太多了不好维护，请尽量使用`do-complex`，示例在example目录。
 - `strcat`, `array-last`, `plist-into-hash` 等
 
 ### 包 `bpftrace-dsl`
@@ -169,14 +171,14 @@ kprobe:do_nanosleep{printf("(:hash 1 :arg1 %ld :arg2 %u)\n", arg1, arg2);}
 
 ## 注意事项
 
-- **权限**：bpftrace 通常需要 root 权限，请以 `sudo` 运行你的 Lisp 程序，或设置合适的 capabilities。
+- **权限**：bpftrace 通常需要 root 权限，请以 `sudo` 运行你的 Lisp 程序，或设置合适的 capabilities，或者直接执行makefile，`make all`运行默认示例。
 - **输出格式**：框架期望 bpftrace 输出的每行均为 `(:hash <idx> <key1> <value1> ...)` 形式的 plist。自定义监控器时请确保 `generate-bpftrace-code` 生成的 `printf` 与之匹配。
 - **性能**：每收到一个事件都会触发 Lisp 侧的 `read-information` 和 `solve`，高频事件（如 `kprobe`）可能带来较大开销。
 - **错误处理**：若 bpftrace 输出行无法解析为 plist 或 `:hash` 对应的监控器不存在，会打印错误并继续。
 
 ## 扩展与定制
 
-- 继承 `monitor-base` 并重写 `read-information` 可实现自定义数据解析逻辑。
+- 继承 `monitor-base` 并重写 `read-information` 可实现自定义数据解析逻辑，可以使用defmonitor简易声明继承。
 - 在规则回调中可调用 `(get-member monitor :key)` 获取数据，或调用 `(get-hook-hash monitor)` 动态管理其他钩子。
 - 修改 `*monitor-hash*` 和 `*idx*` 的绑定可实现多租户或动态加载/卸载监控器。
 
