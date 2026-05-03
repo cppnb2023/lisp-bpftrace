@@ -59,11 +59,11 @@
 (defmethod queue-coerce ((queue circular-queue) type)
   (with-slots (array beg end capacity) queue
     (ecase type
-      ('list
+      (list
        (do-complex ((:collect :clt))
            ((:circular i beg end capacity))
          (:main (:clt (aref array i)))))
-      ('array
+      (array
        (let ((array (make-array (1- capacity))))
          (do-complex ()
              ((:circular i beg end capacity)
