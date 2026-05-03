@@ -2,9 +2,9 @@
   (:use :cl :base-tools :bpftrace-dsl)
   (:import-from :uiop :launch-program :process-info-output)
   (:export :monitor-template :get-probe :get-hook-hash :get-member
-			  :solve :write-monitor :generate-bpftrace-code
-			  :read-information :get-idx :add-monitors :exec-monitors
-			  :with-member-bindings :with-member-let))
+           :solve :write-monitor :generate-bpftrace-code
+           :read-information :get-idx :add-monitors :exec-monitors
+           :with-member-bindings :with-member-let))
 
 (in-package :monitor-template)
 
@@ -36,8 +36,8 @@
 
 (defun add-monitors (stream &rest monitors)
   (dolist (monitor monitors)
-	 (push-monitor monitor)
-	 (write-monitor monitor stream)))
+    (push-monitor monitor)
+    (write-monitor monitor stream)))
 
 (defmethod write-monitor ((monitor monitor-template) stream)
   (with-write-bpftrace (stream)
@@ -60,7 +60,7 @@
      (solve-infomation output))))
 
 (defmacro with-member-bindings (bindings monitor &body body)
-  (let ((monitor-sym (gensym "monitor")))
+  (let ((monitor-sym (gensym "monitor-or-rule")))
     `(let ((,monitor-sym ,monitor))
        (symbol-macrolet
            ,@(loop for (v k) in bindings collect
@@ -68,7 +68,7 @@
          ,@body))))
 
 (defmacro with-member-let (bindings monitor &body body)
-  (let ((monitor-sym (gensym "monitor")))
+  (let ((monitor-sym (gensym "monitor-or-rule")))
     `(let* ((,monitor-sym ,monitor)
             ,@(loop for (v k) in bindings collect
                     `(,v (get-member ,monitor-sym ,k))))

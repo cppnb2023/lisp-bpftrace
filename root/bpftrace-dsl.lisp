@@ -2,7 +2,8 @@
   (:use :cl :base-tools)
   (:export :bpftrace-printf :bpftrace-progn :bpftrace-probe 
            :bpftrace-code :with-write-bpftrace :bpftrace-not-in
-           :bpftrace-in))
+           :bpftrace-in :bpftrace-= :bpftrace-/= :bpftrace-if
+           :bpftrace-cond :bpftrace-gethash :bpftrace-setf))
 
 (in-package :bpftrace-dsl)
 
@@ -44,10 +45,10 @@
      (1- depth))))
 
 (defun generate-fmt (plist &key (start "") (end ""))
-  (do-plist-stage-format (k v plist)
-    (:first (:format "~a:~a ~a" start v (generate-occupy k)))
-    (:main  (:format " :~a ~a" v (generate-occupy k)))
-    (:end   (:format "~a" end))))
+  (do-complex ((:format :fmt)) ((:plist k v plist))
+    (:first (:fmt "~a:~a ~a" start v (generate-occupy k)))
+    (:main  (:fmt " :~a ~a" v (generate-occupy k)))
+    (:end   (:fmt "~a" end))))
 
 (defun generate-args (plist &key (start "") (end ""))
   (flet ((-> (k v)
@@ -57,10 +58,10 @@
              ((eq k :ustr)
               (format nil "strlen(ustr(~a)), ~a" v v))
              (t v))))
-    (do-plist-stage-format (k v plist)
-      (:first (:format "~a~a" start (-> k v)))
-      (:main  (:format ", ~a" (-> k v)))
-      (:end   (:format "~a" end)))))
+    (do-complex ((:format :fmt)) ((:plist k v plist))
+      (:first (:fmt "~a~a" start (-> k v)))
+      (:main  (:fmt ", ~a" (-> k v)))
+      (:end   (:fmt "~a" end)))))
 
 (defun bpftrace-printf (idx &rest plist)
   (format nil "printf(\"(:hash ~a ~a)\\n\"~a)" idx
@@ -72,8 +73,8 @@
       string (strcat string ";")))
 
 (defun bpftrace-concatenate (&rest strings)
-  (do-list-stage-format (str strings)
-    (:main (:format "~a" (build-sentence str)))))
+  (do-complex ((:format :fmt)) ((:list str strings))
+    (:main (:fmt "~a" (build-sentence str)))))
 
 (defun bpftrace-progn (&rest exprs)
   (format nil "{~a}" (apply #'bpftrace-concatenate exprs)))
@@ -82,16 +83,16 @@
   (format nil "~a{~a}" probe (apply #'bpftrace-concatenate exprs)))
 
 (defun bpftrace-not-in (var &rest rest)
-  (do-list-stage-format (arg rest)
-    (:first (:format "(~a != ~a" var arg))
-    (:main  (:format "&& ~a != ~a" var arg))
-    (:end   (:format ")"))))
+  (do-complex ((:format :fmt)) ((:list arg rest))
+    (:first (:fmt "(~a != ~a" var arg))
+    (:main  (:fmt "&& ~a != ~a" var arg))
+    (:end   (:fmt ")"))))
 
 (defun bpftrace-in (var &rest rest)
-  (do-list-stage-format (arg rest)
-    (:first (:format "(~a == ~a" var arg))
-    (:main  (:format " || ~a == ~a" var arg))
-    (:end   (:format ")"))))
+  (do-complex ((:format :fmt)) ((:list arg rest))
+    (:first (:fmt "(~a == ~a" var arg))
+    (:main  (:fmt " || ~a == ~a" var arg))
+    (:end   (:fmt ")"))))
 
 (defun bpftrace-if (cond then &optional else)
   (with-output-to-string (s)
@@ -102,18 +103,23 @@
 (defun bpftrace-= (&rest strings)
   (when (or (not strings) (singlep strings))
     (return-from bpftrace-= (format nil "true")))
-  (do-tuple-stage-format ((left right) strings)
-    (:first (:format "(~a == ~a" left right))
-    (:main  (:format " && ~a == ~a" left right))
-    (:end   (:format ")"))))
+  (do-complex ((:format :fmt)) ((:window (left right) strings))
+    (:first (:fmt "(~a == ~a" left right))
+    (:main  (:fmt " && ~a == ~a" left right))
+    (:end   (:fmt ")"))))
 
 (defun bpftrace-/= (&rest strings)
   (when (or (not strings) (singlep strings))
     (return-from bpftrace-/= (format nil "true")))
-  (do-tuple-stage-format ((left right) strings)
-    (:first (:format "(~a != ~a" left right))
-    (:main  (:format " && ~a != ~a" left right))
-    (:end   (:format ")"))))
+  (do-complex ((:format :fmt))
+      ((:on  l strings)
+       (:do* ((first (car l) (car l)))))
+    (:first (do-complex () ((:list second (cdr l)))
+              (:first (:fmt "(~a != ~a"    first second))
+              (:main  (:fmt " && ~a != ~a" first second))))
+    (:main  (do-complex () ((:list second (cdr l)))
+              (:main  (:fmt " && ~a != ~a" first second))))
+    (:end   (:fmt ")"))))
 
 (defmacro bpftrace-cond (&body sentence)
   (labels ((:bpftrace-cond (sentence)
@@ -129,16 +135,25 @@
     (:bpftrace-cond sentence)))
 
 (defun bpftrace-and (&rest exprs)
-  (do-list-stage-format (e exprs)
-    (:first (:format "(~a" e))
-    (:main  (:format " && ~a" e))
-    (:end   (:format ")"))))
+  (do-complex ((:format :fmt)) ((:list e exprs))
+    (:first (:fmt "(~a" e))
+    (:main  (:fmt " && ~a" e))
+    (:end   (:fmt ")"))))
 
 (defun bpftrace-or  (&rest exprs)
-  (do-list-stage-format (e exprs)
-    (:first (:format "(~a" e))
-    (:main  (:format " || ~a" e))
-    (:end   (:format ")"))))
+  (do-complex ((:format :fmt)) ((:list e exprs))
+    (:first (:fmt "(~a" e))
+    (:main  (:fmt " || ~a" e))
+    (:end   (:fmt ")"))))
+
+(defun bpftrace-gethash (hash first-key &rest key)
+  (format nil "~a[~a~{,~a~}]" hash first-key key))
+
+(defun bpftrace-setf (&rest rest)
+  (unless (= (mod (length rest) 2) 9)
+    (error "bpftrace-setf需要偶数个参数"))
+  (do-complex ((:format :fmt)) ((:tuple (var val) rest))
+    (:main (:fmt "~a = ~a;" var val))))
 
 ;;以下是一套bpftrace的S表达式DSL
 ;;可以像写lisp代码那样编写bpftrace，但是注意:if,:cond由于最终被翻译成bpftrace代码,
@@ -151,7 +166,7 @@
               (:not-in (var &body rest) `(bpftrace-not-in ,var ,@rest))
               (:in (var &body rest) `(bpftrace-in ,var ,@rest))
               (:= (&body strings) `(bpftrace-= ,@strings))
-              ;;(:/= (&body strings) `(bpftrace-/= ,@strings)) 没做好
+              (:/= (&body strings) `(bpftrace-/= ,@strings))
               (:if (cond then &optional else) `(bpftrace-if ,cond ,then ,else))
               (:cond (&body sentence) `(bpftrace-cond ,@sentence))
               (:and (&body exprs) `(bpftrace-and ,@exprs))
@@ -159,6 +174,9 @@
               (:bstr (string) `(format nil "\"~a\"" ,string))
               (:str (var-string) `(format nil "str(~a)" ,var-string))
               (:ustr (var-string) `(format nil "ustr(~a)" ,var-string))
+              (:gethash (hash first-key &body keys)
+                `(bpftrace-gethash ,hash ,first-key ,@keys))
+              (:setf (&body body) `(bpftrace-setf ,@body))
               (:t () "true")
               (:f () "false"))
      (bpftrace-concatenate ,@body)))

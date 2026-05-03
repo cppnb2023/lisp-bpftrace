@@ -58,6 +58,10 @@
               (:not-in (var &body rest) `(bpftrace-not-in ,var ,@rest))
               (:in (var &body rest) `(bpftrace-in ,var ,@rest))
               (:bstr (string)
-                `(format nil "\"~a\"" ,string)))
+                `(format nil "\"~a\"" ,string))
+              (:= (var &body rest) `(bpftrace-= ,var ,@rest))
+              (:/= (var &body rest) `(bpftrace-/= ,var ,@rest))
+              (:gethash (hash first-key &body keys)
+                `(bpftrace-gethash ,hash ,first-key ,@keys)))
      (make-instance ,class-name :probe ,probe)))
 
