@@ -10,8 +10,8 @@
    ;;do-varient
    :do-stage :do-stage* :do-list-stage :do-times-stage :do-plist-stage
    :do-stage-format :do-stage-format* :do-list-stage-format
-   :do-times-stage-format :do-plist-stage-format :do-tuple-stage
-   :do-tuple-stage-format :do-circular-stage :do-circular-stage-collect
+   :do-times-stage-format :do-plist-stage-format :do-window-stage
+   :do-window-stage-format :do-circular-stage :do-circular-stage-collect
    :do-complex
    ;;circular-queue
    :circular-queue :make-circular-queue :queue-empty-p

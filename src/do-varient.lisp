@@ -2,8 +2,8 @@
   (:use :cl :generic :parse-code)
   (:export :do-stage :do-stage* :do-list-stage :do-times-stage :do-plist-stage
            :do-stage-format :do-stage-format* :do-list-stage-format
-           :do-times-stage-format :do-plist-stage-format :do-tuple-stage
-           :do-tuple-stage-format :do-circular-stage :do-circular-stage-collect
+           :do-times-stage-format :do-plist-stage-format :do-window-stage
+           :do-window-stage-format :do-circular-stage :do-circular-stage-collect
            :do-complex))
 
 (in-package :do-varient)
@@ -88,7 +88,7 @@
        ((not ,plist-sym) ,result)
        ,@body)))
 
-(defmacro do-tuple-stage ((elements list &optional result) &body body)
+(defmacro do-window-stage ((elements list &optional result) &body body)
   "分阶段, 滑动窗口式遍历list, 具体操作example/do-varient.lisp"
   (check-stages body)
   (let ((list-sym (gensym "list"))
@@ -157,10 +157,10 @@
        ((not ,plist-sym) ,result)
        ,@body)))
 
-(defmacro do-tuple-stage-format ((elements list) &body body)
-  "像do-tuple-stage, 但可以构造字符串, 具体操作example/do-varient.lisp"
+(defmacro do-window-stage-format ((elements list) &body body)
+  "像do-window-stage, 但可以构造字符串, 具体操作example/do-varient.lisp"
   `(with-stream-format ()
-     (do-tuple-stage (,elements ,list)
+     (do-window-stage (,elements ,list)
        ,@body)))
 
 (defmacro do-circular-stage ((iter beg end limit) &body body)
@@ -212,6 +212,11 @@
                        (:bind iter)
                        (:beg   `(setf ,iter (car ,list-sym)))
                        (:judge `(not ,list-sym))))))
+              (:on
+               (with-parse ((iter list) parameters ())
+                 (:bind  `(,iter ,list))
+                 (:next  `(setf ,iter (cdr ,iter)))
+                 (:judge `(not ,iter))))
               (:plist
                (with-parse ((key val plist) parameters (plist-sym))
                  (:bind  `(,plist-sym ,plist) key val)
@@ -219,7 +224,7 @@
                          `(setf ,val (cadr ,plist-sym)))
                  (:judge `(not (cdr ,plist-sym)))
                  (:next  `(setf ,plist-sym (cddr ,plist-sym)))))
-              (:tuple
+              (:window
                (with-parse ((elements list) parameters (list-sym tmp-sym))
                  (:bind `(,list-sym ,list) tmp-sym)
                  (:beg  `(setf ,tmp-sym ,list-sym))
@@ -229,6 +234,15 @@
                                                   ,e (car ,tmp-sym)))))
                  (:judge `(not ,tmp-sym))
                  (:next  `(setf ,list-sym (cdr ,list-sym)))))
+              (:tuple
+               (with-parse ((elements list) parameters (list-sym))
+                 (:bind `(,list-sym ,list))
+                 (do-list-stage (e elements)
+                   (:first (:bind e) (:beg `(setf ,e (car ,list-sym))))
+                   (:main  (:bind e) (:beg `(setf ,list-sym (cdr ,list-sym)
+                                                  ,e (car ,list-sym))))
+                   (:end   (:judge `(not ,list-sym))))
+                 (:next `(setf ,list-sym (cdr ,list-sym)))))
               (:circular
                (with-parse ((iter beg end limit) parameters (end-sym limit-sym))
                  (:bind  `(,end-sym ,end) `(,limit-sym ,limit) `(,iter ,beg))
@@ -277,7 +291,7 @@
                                   `(setf ,',append-sym (append ,',append-sym ,list))))
                  (:res  append-sym))))))
         (multiple-value-bind (first main end) (parse-stages body)
-          (when first (append-setf bindings `((,firstp-sym t))))
+          (when first (:bind `(,firstp-sym t)))
           `(let* ,bindings
              ,@initial-codes
              (macrolet ,macro-bindings
@@ -292,4 +306,3 @@
                       (go ,loop-sym))
                     ,@end
                     (return (values ,@result-codes)))))))))))
-
