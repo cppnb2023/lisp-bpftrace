@@ -5,7 +5,9 @@
            :singlep :array-last :or= :or/= :or-char= :or-char/= :or-eq
            :strcat :ensure-symbol :forever :with-stream-format
            :ensure-integer :logior-setf :ensure-logior-setf
-           :with-collect :with-wrappers :mvsetq :mvsetf :mvpsetf))
+           :with-collect :with-wrappers :mvsetq :mvsetf :mvpsetf
+           :make-accessor :accessor :with-most :with-symbols
+           :get-most-accessor))
 
 (in-package :generic)
 
@@ -137,4 +139,66 @@
        (psetf ,@(loop for v in vars
                       for b in bindings append
                       `(,v ,b))))))
+
+(defmacro make-accessor (place &optional optimize initial-val)
+  (let* ((meth (multiple-value-list (get-setf-expansion place)))
+         (val-sym (gensym "val"))
+         (opt-place (fifth meth)))
+    `(let ,(mapcar #'list (first meth) (second meth))
+       ,(if optimize
+            `(let ((,val-sym ,initial-val))
+               (lambda (&optional ensure write)
+                 (declare (boolean ensure))
+                 (if ensure
+                     (setf ,opt-place write
+                           ,val-sym write)
+                     ,val-sym)))
+            `(lambda (&optional ensure write)
+               (declare (boolean ensure))
+               (if ensure
+                   (setf ,opt-place write)
+                   ,opt-place))))))
+
+(defun accessor (lambda-func)
+  (funcall lambda-func nil nil))
+
+(defun (setf accessor) (new-val lambda-func)
+  (funcall lambda-func t new-val))
+
+(defmacro with-most ((op &rest places) (most-val-sym most-expr-sym)
+                     &body body)
+  (let* ((meths (mapcar #'(lambda (p)
+                            (multiple-value-list (get-setf-expansion p)))
+                        places))
+         (tmps  (mapcar #'(lambda (p) (gensym)) places))
+         (opt-places (mapcar #'fifth meths)))
+    (labels ((most (place tmps)
+               (destructuring-bind (first second &rest rest) tmps
+                 (destructuring-bind (p-first p-second &rest p-rest) place
+                   (if rest
+                       `(if (funcall ,op ,first ,second)
+                            ,(most (cons p-first p-rest)  (cons first  rest))
+                            ,(most (cons p-second p-rest) (cons second rest)))
+                       `(if (funcall ,op ,first ,second)
+                            (symbol-macrolet ((,most-val-sym ,first)
+                                              (,most-expr-sym ,p-first))
+                              ,@body)
+                            (symbol-macrolet ((,most-val-sym  ,second)
+                                              (,most-expr-sym ,p-second))
+                              ,@body)))))))
+      `(let ,(mapcar #'list
+                     (mapcan #'first  meths)
+                     (mapcan #'second meths))
+         (let ,(mapcar #'list tmps opt-places)
+           ,(most opt-places tmps))))))
+
+(defmacro with-symbols ((&rest symbols) &body body)
+  `(let ,(loop for sym in symbols collect
+               `(,sym (gensym (string ',sym))))
+     ,@body))
+
+(defmacro get-most-accessor (op &body places)
+  (with-symbols (val-sym most-sym)
+    `(with-most (,op ,@places) (,val-sym ,most-sym)
+       (make-accessor ,most-sym t ,val-sym))))
 

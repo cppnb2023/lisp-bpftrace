@@ -7,6 +7,7 @@
    :and/= :or-char= :or-char/= :and-char= :and-char/= :strcat
    :ensure-symbol :forever  :plist-into-hash :ensure-integer :logior-setf
    :ensure-logior-setf :with-wrappers :mvsetq :mvsetf :mvpsetf
+   :make-accessor :accessor :with-most :with-symbols :get-most-accessor
    ;;do-varient
    :do-stage :do-stage* :do-list-stage :do-times-stage :do-plist-stage
    :do-stage-format :do-stage-format* :do-list-stage-format
