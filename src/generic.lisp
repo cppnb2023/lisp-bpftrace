@@ -7,7 +7,7 @@
            :ensure-integer :logior-setf :ensure-logior-setf
            :with-collect :with-wrappers :mvsetq :mvsetf :mvpsetf
            :make-accessor :accessor :with-most :with-symbols
-           :get-most-accessor :valid-index :best-index))
+           :get-most-accessor :valid-index :best-index :make-slice))
 
 (in-package :generic)
 
@@ -232,3 +232,9 @@
                     (setf res idx))
                finally (return res))))))
 
+(defun make-slice (array &optional start end)
+  (setf start (if start start 0))
+  (setf end   (if end end (length array)))
+  (make-array (- end start)
+              :displaced-to array
+              :displaced-index-offset start))
