@@ -7,7 +7,7 @@
            :ensure-integer :logior-setf :ensure-logior-setf
            :with-collect :with-wrappers :mvsetq :mvsetf :mvpsetf
            :make-accessor :accessor :with-most :with-symbols
-           :get-most-accessor))
+           :get-most-accessor :valid-index :best-index))
 
 (in-package :generic)
 
@@ -165,14 +165,28 @@
 (defun (setf accessor) (new-val lambda-func)
   (funcall lambda-func t new-val))
 
-(defmacro with-most ((op &rest places) (most-val-sym most-expr-sym)
+;;测试
+(defmacro with-most ((op &rest places)
+                           (most-val-sym most-expr-sym &optional (preffix 'arg))
                      &body body)
   (let* ((meths (mapcar #'(lambda (p)
                             (multiple-value-list (get-setf-expansion p)))
                         places))
          (tmps  (mapcar #'(lambda (p) (gensym)) places))
          (opt-places (mapcar #'fifth meths)))
-    (labels ((most (place tmps)
+    (labels ((make-parameter-acc (place)
+               (loop for parameter in place
+                     for i = 0 then (1+ i)
+                     collect
+                     `(,(intern (format nil "~s~s" preffix i))
+                        ,(if (= i 0) `',parameter parameter))))
+             (make-symbol-macro-bindings (place val)
+               `(symbol-macrolet ((,most-val-sym ,val)
+                                  (,most-expr-sym ,place)
+                                  ,@(when (listp place)
+                                      (make-parameter-acc place)))
+                  ,@body))
+             (most (place tmps)
                (destructuring-bind (first second &rest rest) tmps
                  (destructuring-bind (p-first p-second &rest p-rest) place
                    (if rest
@@ -180,17 +194,17 @@
                             ,(most (cons p-first p-rest)  (cons first  rest))
                             ,(most (cons p-second p-rest) (cons second rest)))
                        `(if (funcall ,op ,first ,second)
-                            (symbol-macrolet ((,most-val-sym ,first)
-                                              (,most-expr-sym ,p-first))
-                              ,@body)
-                            (symbol-macrolet ((,most-val-sym  ,second)
-                                              (,most-expr-sym ,p-second))
-                              ,@body)))))))
+                            ,(make-symbol-macro-bindings p-first  first)
+                            ,(make-symbol-macro-bindings p-second second)))))))
       `(let ,(mapcar #'list
                      (mapcan #'first  meths)
                      (mapcan #'second meths))
          (let ,(mapcar #'list tmps opt-places)
-           ,(most opt-places tmps))))))
+           ,(cond
+              ((null places) `(progn ,@body))
+              ((singlep places)
+               (make-symbol-macro-bindings (first opt-places) (first tmps)))
+              (t (most opt-places tmps))))))))
 
 (defmacro with-symbols ((&rest symbols) &body body)
   `(let ,(loop for sym in symbols collect
@@ -201,4 +215,20 @@
   (with-symbols (val-sym most-sym)
     `(with-most (,op ,@places) (,val-sym ,most-sym)
        (make-accessor ,most-sym t ,val-sym))))
+
+(defun valid-index (length &rest idx-list)
+  (loop for idx in idx-list
+        when (< idx length)
+        collect idx))
+
+(defun best-index (array compare idx-list)
+  (cond
+    ((null idx-list) nil)
+    ((singlep idx-list) (car idx-list))
+    (t (destructuring-bind (first &rest rest) idx-list
+         (loop with res = first
+               for idx in rest
+               do (unless (funcall compare (aref array res) (aref array idx))
+                    (setf res idx))
+               finally (return res))))))
 
