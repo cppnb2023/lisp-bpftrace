@@ -13,24 +13,30 @@
 (defmacro root (i)
   `(truncate (1- ,i) 2))
 
-(defun heapify! (array compare idx &key start end)
+(defun best-leaf (array test i)
+  (let ((largest
+         (best-position array test
+                        :specify
+                        (remove-if-not (range :ge 0 :lt (length array))
+                                       (list i (left i) (right i))))))
+    (when (and largest (not (= largest i))) largest)))
+
+(defun heapify! (array test idx &key start end)
+  (declare (array array))
+  (declare ((unsigned-byte 64) idx))
   (labels ((heapify (array idx)
-             (let ((largest nil))
-               (setf largest (best-index array compare
-                                         (valid-index (length array) idx (left idx)
-                                                      (right idx))))
-               (if (= largest idx)
-                   array
-                   (progn
-                     (rotatef (aref array largest) (aref array idx))
-                     (heapify array largest))))))
+             (aif (best-leaf array test idx)
+                  (progn
+                    (rotatef (aref array idx) (aref array it))
+                    (heapify array it))
+                  array)))
     (heapify (make-slice array start end) idx)))
 
 (defun build-heap! (array compare &key start end)
+  (declare (array array))
   (labels ((build-heap (array compare)
              (loop for i from (root (length array)) downto 0
-                   do (format t "~s~%"
-                              (heapify! array compare i :start start :end end)))
+                   do (heapify! array compare i :start start :end end))
              array))
     (build-heap (make-slice array start end) compare)))
 

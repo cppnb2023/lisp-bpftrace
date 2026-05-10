@@ -7,7 +7,7 @@
            :ensure-integer :logior-setf :ensure-logior-setf
            :with-collect :with-wrappers :mvsetq :mvsetf :mvpsetf
            :make-accessor :accessor :with-most :with-symbols
-           :get-most-accessor :valid-index :best-index :make-slice))
+           :get-most-accessor :make-slice :range :best-position))
 
 (in-package :generic)
 
@@ -216,25 +216,41 @@
     `(with-most (,op ,@places) (,val-sym ,most-sym)
        (make-accessor ,most-sym t ,val-sym))))
 
-(defun valid-index (length &rest idx-list)
-  (loop for idx in idx-list
-        when (< idx length)
-        collect idx))
-
-(defun best-index (array compare idx-list)
-  (cond
-    ((null idx-list) nil)
-    ((singlep idx-list) (car idx-list))
-    (t (destructuring-bind (first &rest rest) idx-list
-         (loop with res = first
-               for idx in rest
-               do (unless (funcall compare (aref array res) (aref array idx))
-                    (setf res idx))
-               finally (return res))))))
-
 (defun make-slice (array &optional start end)
   (setf start (if start start 0))
   (setf end   (if end end (length array)))
   (make-array (- end start)
               :displaced-to array
               :displaced-index-offset start))
+
+(defmacro range (&key gt ge lt le)
+  (when (and gt ge)
+    (error "have :GT and :GE at once"))
+  (when (and lt le)
+    (error "hava :LT and :LE at once"))
+  (let ((condition nil)
+        (arg-sym (gensym "arg")))
+    (when gt (push `(>  ,arg-sym ,gt) condition))
+    (when ge (push `(>= ,arg-sym ,ge) condition))
+    (when lt (push `(<  ,arg-sym ,lt) condition))
+    (when le (push `(<= ,arg-sym ,le) condition))
+    `(lambda (,arg-sym)
+       (and ,@condition))))
+
+(defun best-position (array test &key start end specify)
+  (if specify
+      (progn
+        (loop with res = (car specify)
+              for i in (cdr specify)
+              do (unless (funcall test (aref array res) (aref array i))
+                   (setf res i))
+              finally (return res)))
+      (progn
+        (unless start (setf start 0))
+        (unless end   (setf end   (length array)))
+        (loop with res = start
+              for i from (1+ start) below end
+              do (unless (funcall test (aref array res) (aref array i))
+                   (setf res i))
+              finally (return res)))))
+
