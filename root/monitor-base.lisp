@@ -3,7 +3,7 @@
   (:export :monitor-base :get-hook-hash :get-member
            :make-monitor :generate-bpftrace-code :solve
            :read-information :with-monitor-base-bind :add-monitors
-           :exec-monitors :defmonitor ::tracepoint))
+           :exec-monitors :defmonitor))
 
 (in-package :monitor-base)
 

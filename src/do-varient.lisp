@@ -1,37 +1,8 @@
 (defpackage :do-varient
   (:use :cl :generic :parse-code)
-  (:export :do-stage :do-stage* :do-list-stage :do-times-stage :do-plist-stage
-           :do-stage-format :do-stage-format* :do-list-stage-format
-           :do-times-stage-format :do-plist-stage-format :do-window-stage
-           :do-window-stage-format :do-circular-stage :do-circular-stage-collect
-           :do-complex))
+  (:export :do-complex))
 
 (in-package :do-varient)
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun check-stages (body)
-    "检查是否有非法阶段，用于含stage的循环流"
-    (dolist (code body)
-      (unless (or-eq (car code) :main :first :end)
-        (error "不可解析keyword ~a" (car code)))))
-
-  (defun parse-stages (body)
-    "解析提取每个阶段代码，用于含stage的循环流"
-    (let ((first (cdr (find :first body :key #'car)))
-          (main  (cdr (find :main body :key #'car)))
-          (end   (cdr (find :end body :key #'car))))
-      (values first main end)))
-
-  (defun make-stage-code (first main firstp-sym)
-    "生成阶段代码"
-    (if first
-        `(if ,firstp-sym
-             (progn
-               ,@first
-               (setf ,firstp-sym nil))
-             (progn
-               ,@main))
-        `(progn ,@main))))
 
 (defmacro do-stage (binds cond-res &body body)
   "和do一样但可以分first, main, end阶段, 具体操作example/do-varient.lisp"
@@ -63,12 +34,6 @@
     `(do-stage* ((,list-sym ,list (cdr ,list-sym))
                  (,var (car ,list-sym) (car ,list-sym)))
        ((not ,list-sym) ,result)
-       ,@body)))
-
-(defmacro do-mapcar-stage ((element list) &body body)
-  "类似(loop for element in list collect ...)"
-  `(with-collect ()
-     (do-list-stage (,element ,list)
        ,@body)))
 
 (defmacro do-times-stage ((var times &optional result) &body body)
@@ -122,61 +87,30 @@
             ,@end)
          ,result))))
 
-(defmacro do-stage-format (binds cond &body body)
-  "分阶段式构造字符串, 语法像do, 具体操作example/do-varient.lisp"
-  `(with-stream-format ()
-     (do-stage ,binds ,cond ,@body)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun check-stages (body)
+    "检查是否有非法阶段，用于含stage的循环流"
+    (dolist (code body)
+      (unless (or-eq (car code) :main :first :end)
+        (error "不可解析keyword ~a" (car code)))))
 
-(defmacro do-stage-format* (binds cond &body body)
-  "分阶段式构造字符串, 语法像do*, 具体操作example/do-varient.lisp"
-  `(with-stream-format ()
-     (do-stage* ,binds ,cond ,@body)))
+  (defun parse-stages (body)
+    "解析提取每个阶段代码，用于含stage的循环流"
+    (let ((first (cdr (find :first body :key #'car)))
+          (main  (cdr (find :main body :key #'car)))
+          (end   (cdr (find :end body :key #'car))))
+      (values first main end)))
 
-(defmacro do-list-stage-format ((var list) &body body)
-  "分阶段遍历list并且构造字符串, 具体操作example/do-varient.lisp"
-  (let ((list-sym (gensym "list")))
-    `(do-stage-format* ((,list-sym ,list (cdr ,list-sym))
-                        (,var (car ,list-sym) (car ,list-sym)))
-       ((not ,list-sym))
-       ,@body)))
-
-(defmacro do-times-stage-format ((var times) &body body)
-  "分阶段dotimes并且构造字符串, 具体操作example/do-varient.lisp"
-  (let ((times-sym (gensym "times")))
-    `(do-stage-format ((,times-sym ,times)
-                       (,var 0 (1+ ,var)))
-       ((= ,var ,times-sym))
-       ,@body)))
-
-(defmacro do-plist-stage-format ((key val plist &optional result) &body body)
-  "像do-plist-stage, 但可以构造字符串, 具体操作example/do-varient.lisp"
-  (let ((plist-sym (gensym "plist")))
-    `(do-stage-format* ((,plist-sym ,plist (cddr ,plist-sym))
-                        (,key (car ,plist-sym)  (car ,plist-sym))
-                        (,val (cadr ,plist-sym) (cadr ,plist-sym)))
-       ((not ,plist-sym) ,result)
-       ,@body)))
-
-(defmacro do-window-stage-format ((elements list) &body body)
-  "像do-window-stage, 但可以构造字符串, 具体操作example/do-varient.lisp"
-  `(with-stream-format ()
-     (do-window-stage (,elements ,list)
-       ,@body)))
-
-(defmacro do-circular-stage ((iter beg end limit) &body body)
-  "环形遍历"
-  (let ((end-sym (gensym  "end"))
-        (limit-sym (gensym  "capacity")))
-    `(do-stage ((,iter ,beg (mod (1+ ,iter) ,limit-sym))
-                (,end-sym ,end)
-                (,limit-sym ,limit))
-       ((= ,iter ,end-sym))
-       ,@body)))
-
-(defmacro do-circular-stage-collect ((iter beg end limit) &body body)
-  `(with-collect ()
-     (do-circular-stage (,iter ,beg ,end ,limit)
-       ,@body)))
+  (defun make-stage-code (first main firstp-sym)
+    "生成阶段代码"
+    (if first
+        `(if ,firstp-sym
+             (progn
+               ,@first
+               (setf ,firstp-sym nil))
+             (progn
+               ,@main))
+        `(progn ,@main))))
 
 ;;测试阶段 1.1
 (defmacro do-complex ((&rest accumulation) (&rest styles) &body body)

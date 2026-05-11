@@ -23,6 +23,6 @@
   "将plist写入hash-table中"
   (when (= (mod (length plist) 2) 1)
     (error "plist have odd elements"))
-  (do-plist-stage (k v plist)
+  (do-complex () ((:plist k v plist))
     (:main (setf (gethash k hash) v))))
 

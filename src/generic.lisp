@@ -3,11 +3,10 @@
   (:use :cl)
   (:export :aif :awhen :aunless :aif2 :awhen2 :aunless2 :it :last1
            :singlep :array-last :or= :or/= :or-char= :or-char/= :or-eq
-           :strcat :ensure-symbol :forever :with-stream-format
-           :ensure-integer :logior-setf :ensure-logior-setf
-           :with-collect :with-wrappers :mvsetq :mvsetf :mvpsetf
-           :make-accessor :accessor :with-most :with-symbols
-           :get-most-accessor :make-slice :range :best-position))
+           :strcat :forever :ensure :with-ensure :logicf :with-stream-format
+           :with-collect :with-wrappers :mvpsetq :mvpsetf :make-accessor
+           :accessor :with-most :with-symbols :get-most-accessor :make-slice
+           :range :best-position))
 
 (in-package :generic)
 
@@ -79,18 +78,39 @@
   `(do () (nil)
      ,@body))
 
-(defun ensure-symbol (var symbol)
-  "确保返回符号，var不是符号返回symbol"
-  (if (symbolp var) var symbol))
+(defmacro logicf (op place num)
+  (let* ((meth (multiple-value-list (get-setf-expansion place)))
+         (tmp  (third meth))
+         (optimize-place (fifth meth))
+         (op-func
+          (ecase op
+            (:ior #'logior) (:xor #'logxor)
+            (:and #'logand)))
+         (bindings (mapcar #'list
+                           (append (first  meth) tmp)
+                           (append (second meth)
+                                   (list `(funcall ,op-func ,optimize-place ,num))))))
+    `(let* ,bindings
+       ,(fourth meth))))
 
-(defun ensure-integer (var number)
-  (if (integerp var) var number))
+(defun ensure (type var default)
+  (if (typep var type) var default))
 
-(defmacro logior-setf (var num)
-  `(setf ,var (logior ,var ,num)))
-
-(defmacro ensure-logior-setf (var num)
-  `(setf ,var (logior (ensure-integer ,var 0) ,num)))
+(defmacro with-ensure ((type place default) (reader writer) &body body)
+  (let* ((meth (multiple-value-list (get-setf-expansion place)))
+         (tmp  (first (third meth)))
+         (bindings (mapcar #'list (first meth) (second meth)))
+         (optimize-place (fifth meth))
+         (read-sym  (gensym "read")))
+    `(let (,@bindings
+           ,read-sym)
+       (flet ((,reader () ,read-sym)
+              (,writer (,tmp)
+                (setf ,read-sym ,(fourth meth))))
+         (setf ,read-sym ,optimize-place)
+         (unless (typep ,read-sym ',type)
+           (,writer ,default))
+         ,@body))))
 
 (defmacro with-stream-format ((&optional (stream-sym (gensym "sstream"))) &body body)
   "使用:format将多个格式化字符串拼接返回"
@@ -113,7 +133,7 @@
           :initial-value `(progn ,@body)
           :from-end t))
 
-(defmacro mvsetq (vars values)
+(defmacro mvpsetq (vars values)
   (let ((bindings
          (loop for v in vars collect
                (gensym (string v)))))
@@ -122,7 +142,7 @@
                for b in bindings collect
                `(setq ,v ,b)))))
 
-(defmacro mvsetf (vars values)
+(defmacro mvpsetf (vars values)
   (let ((bindings
          (loop for v in vars collect
                (gensym (string v)))))
@@ -130,15 +150,6 @@
        ,@(loop for v in vars
                for b in bindings collect
                `(setf ,v ,b)))))
-
-(defmacro mvpsetf (vars values)
-  (let ((bindings
-         (loop for v in vars collect
-               (gensym (string v)))))
-    `(multiple-value-bind ,bindings ,values
-       (psetf ,@(loop for v in vars
-                      for b in bindings append
-                      `(,v ,b))))))
 
 (defmacro make-accessor (place &optional optimize initial-val)
   (let* ((meth (multiple-value-list (get-setf-expansion place)))
