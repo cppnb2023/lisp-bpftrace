@@ -1,9 +1,12 @@
 (defpackage :queue-template
   (:use :cl)
   (:export :queue-enqueue :queue-dequeue :queue-peek :queue-coerce
-           :queue-size :queue-empty-p :queue-empty :queue-full))
+           :queue-size :queue-empty-p :queue-empty :queue-full
+           :*queue-default-size*))
 
 (in-package :queue-template)
+
+(defparameter *queue-default-size* 5)
 
 (defgeneric queue-enqueue (queue element)
   (:documentation "队列入队，返回值不明"))

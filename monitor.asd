@@ -12,7 +12,8 @@
      (:file "src/queue/queue-template")
      (:file "src/queue/circular-queue"
             :depends-on ("src/queue/queue-template"
-                         "src/do-varient"))
+                         "src/do-varient"
+                         "src/generic"))
      (:file "src/base-tools"
             :depends-on ("src/generic"
                          "src/parse-code"

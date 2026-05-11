@@ -11,6 +11,7 @@
   (set-macro-character
    #\[
    (lambda (stream char)
+     (declare (ignorable char))
      (let* ((len (read stream))
             (str (make-array len :element-type 'character
                              :fill-pointer 0)))
@@ -150,7 +151,7 @@
   (format nil "~a[~a~{,~a~}]" hash first-key key))
 
 (defun bpftrace-setf (&rest rest)
-  (unless (= (mod (length rest) 2) 9)
+  (unless (= (mod (length rest) 2) 0)
     (error "bpftrace-setf需要偶数个参数"))
   (do-complex ((:format :fmt)) ((:tuple (var val) rest))
     (:main (:fmt "~a = ~a;" var val))))

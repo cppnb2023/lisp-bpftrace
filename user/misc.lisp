@@ -20,8 +20,8 @@
     (handler-case 
         (with-open-file (in pid-or-path :direction :input)
           (loop do (push (read-line in) strings)))
-      (end-of-file (c)
+      (end-of-file ()
         (return-from process-status (nreverse strings)))
-      (file-error (c)
+      (file-error ()
         (return-from process-status (nreverse strings))))))
 

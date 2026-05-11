@@ -1,5 +1,5 @@
 (defpackage :circular-queue
-  (:use :cl :queue-template :do-varient)
+  (:use :cl :queue-template :do-varient :generic)
   (:export :circular-queue :make-circular-queue :queue-empty-p
            :queue-full-p :queue-enqueue :queue-dequeue :queue-peek
            :queue-size :queue-coerce :iterator))
@@ -7,40 +7,46 @@
 (in-package :circular-queue)
 
 (defclass circular-queue ()
-  ((array :initform nil)
+  ((array :type simple-array)
    (capacity :type (unsigned-byte 32) :initarg :capacity
-             :initform (error "必须分配空间"))
+             :initform *queue-default-size*)
    (beg :type (unsigned-byte 32) :initform 0)
    (end :type (unsigned-byte 32) :initform 0)))
+
+(defmacro with-circular-queue ((circular-queue) &body body)
+  `(with-opt-slots ((simple-array array) ((unsigned-byte 32) capacity)
+                    ((unsigned-byte 32) beg) ((unsigned-byte 32) end))
+       ,circular-queue
+     ,@body))
 
 (defmacro next-pos (var limit)
   `(mod (1+ ,var) ,limit))
 
 (defmethod initialize-instance :after ((circular-queue circular-queue) &key)
-  (with-slots (array capacity) circular-queue
+  (with-circular-queue (circular-queue)
     (setf array (make-array capacity))))
 
 (defun make-circular-queue (capacity)
   (make-instance 'circular-queue :capacity (1+ capacity)))
 
 (defmethod queue-empty-p ((queue circular-queue))
-  (with-slots (beg end) queue (= beg end)))
+  (with-circular-queue (queue) (= beg end)))
 
 (defmethod queue-full-p ((queue circular-queue))
-  (with-slots (beg end capacity) queue
+  (with-circular-queue (queue)
     (= (next-pos end capacity) beg)))
 
 (defmethod queue-enqueue ((queue circular-queue) element)
   (when (queue-full-p queue)
     (error 'queue-full :queue queue))
-  (with-slots (array beg end capacity) queue
+  (with-circular-queue (queue)
     (setf (aref array end) element
           end (next-pos end capacity))))
 
 (defmethod queue-dequeue ((queue circular-queue))
   (when (queue-empty-p queue)
     (error 'queue-empty :queue queue))
-  (with-slots (array beg capacity) queue
+  (with-circular-queue (queue)
     (prog1
         (aref array beg)
       (setf (aref array beg) nil
@@ -49,15 +55,15 @@
 (defmethod queue-peek ((queue circular-queue))
   (if (queue-empty-p queue)
       (error 'queue-empty :queue queue)
-      (with-slots (array beg) queue
+      (with-circular-queue (queue)
         (aref array beg))))
 
 (defmethod queue-size ((queue circular-queue))
-  (with-slots (beg end capacity) queue
+  (with-circular-queue (queue)
     (mod (- end beg) capacity)))
 
 (defmethod queue-coerce ((queue circular-queue) type)
-  (with-slots (array beg end capacity) queue
+  (with-circular-queue (queue)
     (ecase type
       (list
        (do-complex ((:collect :clt))
@@ -71,7 +77,7 @@
            (:main (setf (aref array j) (aref array i)))))))))
 
 (defmethod iterator ((circular circular-queue))
-  (with-slots (array beg end capacity) circular
+  (with-circular-queue (circular)
     (let ((iter beg))
       (lambda ()
         (if (= iter end)

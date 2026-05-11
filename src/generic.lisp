@@ -6,7 +6,7 @@
            :strcat :forever :ensure :with-ensure :logicf :with-stream-format
            :with-collect :with-wrappers :mvpsetq :mvpsetf :make-accessor
            :accessor :with-most :with-symbols :get-most-accessor :make-slice
-           :range :best-position))
+           :range :best-position :with-opt-slots))
 
 (in-package :generic)
 
@@ -181,9 +181,10 @@
                            (most-val-sym most-expr-sym &optional (preffix 'arg))
                      &body body)
   (let* ((meths (mapcar #'(lambda (p)
+                            (declare (ignorable p))
                             (multiple-value-list (get-setf-expansion p)))
                         places))
-         (tmps  (mapcar #'(lambda (p) (gensym)) places))
+         (tmps  (mapcar #'(lambda (p) (declare (ignorable p)) (gensym)) places))
          (opt-places (mapcar #'fifth meths)))
     (labels ((make-parameter-acc (place)
                (loop for parameter in place
@@ -265,3 +266,18 @@
                    (setf res i))
               finally (return res)))))
 
+(defmacro with-opt-slots (opt-slots object &body body)
+  (with-symbols (obj-sym)
+    `(symbol-macrolet
+         ,(mapcar #'(lambda (slot)
+                      (cond
+                        ((listp slot)
+                         `(,(second slot)
+                            (the ,(first slot)
+                                 (slot-value ,obj-sym ',(second slot)))))
+                        ((symbolp slot)
+                         `(,slot
+                            (slot-value ,obj-sym ',slot)))))
+                  opt-slots)
+       (let ((,obj-sym ,object))
+         ,@body))))
