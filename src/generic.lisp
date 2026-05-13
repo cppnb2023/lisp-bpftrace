@@ -5,8 +5,8 @@
            :singlep :array-last :or= :or/= :or-char= :or-char/= :or-eq
            :strcat :forever :ensure :with-ensure :logicf :with-stream-format
            :with-collect :with-wrappers :mvpsetq :mvpsetf :make-accessor
-           :accessor :with-most :with-symbols :get-most-accessor :make-slice
-           :range :best-position :with-opt-slots))
+           :accessor :with-symbols :make-slice :range :best-position :with-opt-slots
+           :with-compare))
 
 (in-package :generic)
 
@@ -112,6 +112,20 @@
            (,writer ,default))
          ,@body))))
 
+(define-setf-expander ensure (type place default)
+  (let* ((type-sym (gensym))
+         (default-sym (gensym))
+         (place-val (gensym))
+         (meth (multiple-value-list (get-setf-expansion place)))
+         (tmps (append (first meth)
+                       (list type-sym default-sym place-val)))
+         (vals (append (second meth)
+                       (list type default (fifth meth)))))
+    (values tmps vals (third meth)
+            (fourth meth)
+            `(if (typep ,place-val ,type-sym)
+                 ,place-val ,default-sym))))
+
 (defmacro with-stream-format ((&optional (stream-sym (gensym "sstream"))) &body body)
   "使用:format将多个格式化字符串拼接返回"
   `(with-output-to-string (,stream-sym)
@@ -176,57 +190,10 @@
 (defun (setf accessor) (new-val lambda-func)
   (funcall lambda-func t new-val))
 
-;;测试
-(defmacro with-most ((op &rest places)
-                           (most-val-sym most-expr-sym &optional (preffix 'arg))
-                     &body body)
-  (let* ((meths (mapcar #'(lambda (p)
-                            (declare (ignorable p))
-                            (multiple-value-list (get-setf-expansion p)))
-                        places))
-         (tmps  (mapcar #'(lambda (p) (declare (ignorable p)) (gensym)) places))
-         (opt-places (mapcar #'fifth meths)))
-    (labels ((make-parameter-acc (place)
-               (loop for parameter in place
-                     for i = 0 then (1+ i)
-                     collect
-                     `(,(intern (format nil "~s~s" preffix i))
-                        ,(if (= i 0) `',parameter parameter))))
-             (make-symbol-macro-bindings (place val)
-               `(symbol-macrolet ((,most-val-sym ,val)
-                                  (,most-expr-sym ,place)
-                                  ,@(when (listp place)
-                                      (make-parameter-acc place)))
-                  ,@body))
-             (most (place tmps)
-               (destructuring-bind (first second &rest rest) tmps
-                 (destructuring-bind (p-first p-second &rest p-rest) place
-                   (if rest
-                       `(if (funcall ,op ,first ,second)
-                            ,(most (cons p-first p-rest)  (cons first  rest))
-                            ,(most (cons p-second p-rest) (cons second rest)))
-                       `(if (funcall ,op ,first ,second)
-                            ,(make-symbol-macro-bindings p-first  first)
-                            ,(make-symbol-macro-bindings p-second second)))))))
-      `(let ,(mapcar #'list
-                     (mapcan #'first  meths)
-                     (mapcan #'second meths))
-         (let ,(mapcar #'list tmps opt-places)
-           ,(cond
-              ((null places) `(progn ,@body))
-              ((singlep places)
-               (make-symbol-macro-bindings (first opt-places) (first tmps)))
-              (t (most opt-places tmps))))))))
-
 (defmacro with-symbols ((&rest symbols) &body body)
   `(let ,(loop for sym in symbols collect
                `(,sym (gensym (string ',sym))))
      ,@body))
-
-(defmacro get-most-accessor (op &body places)
-  (with-symbols (val-sym most-sym)
-    `(with-most (,op ,@places) (,val-sym ,most-sym)
-       (make-accessor ,most-sym t ,val-sym))))
 
 (defun make-slice (array &optional start end)
   (setf start (if start start 0))
@@ -281,3 +248,14 @@
                   opt-slots)
        (let ((,obj-sym ,object))
          ,@body))))
+
+(defmacro with-compare ((&rest exprs) &body body)
+  (let ((symbols (loop for nil in exprs collect (gensym))))
+    `(let ,(mapcar #'list symbols exprs)
+       (cond
+         ,@(mapcar #'(lambda (code)
+                       (destructuring-bind (first &rest rest) code
+                         (if (eq first t)
+                             `(t ,@rest)
+                             `((funcall ,first ,@symbols) ,@rest))))
+                   body)))))

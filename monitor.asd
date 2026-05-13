@@ -3,6 +3,10 @@
     :components
     ((:file "src/generic")
      (:file "src/parse-code")
+     (:file "src/heap"
+            :depends-on ("src/generic"))
+     (:file "src/event-time"
+            :depends-on ("src/generic"))
      (:file "src/do-varient"
             :depends-on ("src/generic"
                          "src/parse-code"))
@@ -10,15 +14,12 @@
             :depends-on ("src/generic"
                          "src/do-varient"))
      (:file "src/queue/queue-template")
-     (:file "src/queue/circular-queue"
-            :depends-on ("src/queue/queue-template"
-                         "src/do-varient"
-                         "src/generic"))
      (:file "src/base-tools"
             :depends-on ("src/generic"
+                         "src/heap"
+                         "src/event-time"
                          "src/parse-code"
                          "src/do-varient"
-                         "src/queue/circular-queue"
                          "src/hash-op"))
      (:file "root/bpftrace-dsl"
             :depends-on ("src/base-tools"))

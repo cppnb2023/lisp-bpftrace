@@ -22,8 +22,7 @@
   (:documentation "查看队列是否为空，为空返回t"))
 (defgeneric queue-full-p (queue)
   (:documentation
-   "查看队列是否已满，已满返回t
-    理论无限长的队列应永远返回nil"))
+   "查看队列是否已满，已满返回t"))
 
 (define-condition queue-empty (error)
   ((queue :initarg :queue :reader queue-empty-queue))

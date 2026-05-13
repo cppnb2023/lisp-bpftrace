@@ -1,6 +1,6 @@
 (defpackage :heap
   (:use :cl :generic)
-  (:export :heapify! :build-heap!))
+  (:export :heapify! :build-heap! :sort-heap!))
 
 (in-package :heap)
 
@@ -32,11 +32,21 @@
                   array)))
     (heapify (make-slice array start end) idx)))
 
-(defun build-heap! (array compare &key start end)
+(defun build-heap! (array test &key start end)
   (declare (array array))
-  (labels ((build-heap (array compare)
+  (labels ((build-heap (array test)
              (loop for i from (root (length array)) downto 0
-                   do (heapify! array compare i :start start :end end))
+                   do (heapify! array test i :start start :end end))
              array))
-    (build-heap (make-slice array start end) compare)))
+    (build-heap (make-slice array start end) test)))
+
+(defun sort-heap! (array test &key start end)
+  (declare (array array))
+  (unless start (setf start 0))
+  (unless end   (setf end   (length array)))
+  (loop for i from (1- end) downto start
+        do (progn
+             (rotatef (aref array start) (aref array i))
+             (heapify! array test start :start start :end i)))
+  (make-slice array start end))
 
