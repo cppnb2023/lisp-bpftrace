@@ -10,7 +10,7 @@
 
 (in-package :generic)
 
-(defmacro aif (cond then else)
+(defmacro aif (cond then &optional else)
   "Anaphoric if，用it保存cond返回值"
   `(let ((it ,cond))
      (if it ,then ,else)))
@@ -23,7 +23,7 @@
   "这个用处不大"
   `(aif ,cond nil (progn ,@else)))
 
-(defmacro aif2 (cond then else)
+(defmacro aif2 (cond then &optional else)
   "Anaphoric if但可以进行多值判断，适用于hash"
   (let ((win-sym (gensym "win")))
     `(multiple-value-bind (it ,win-sym) ,cond
@@ -259,3 +259,23 @@
                              `(t ,@rest)
                              `((funcall ,first ,@symbols) ,@rest))))
                    body)))))
+
+(defun single-level-p (lst)
+  (and (listp lst) (loop for code in lst always (atom code))))
+
+(defun tree-reduce (tree-lst func)
+  (labels ((tree-reduce% (lst)
+             (if (single-level-p lst)
+                 (funcall func lst)
+                 (loop for code in lst
+                       if (atom code)
+                         collect code into result
+                       else
+                         collect (tree-reduce% code) into result
+                       finally (return (funcall func result))))))
+    (tree-reduce% tree-lst)))
+
+(defun read-what (type &optional stream)
+  (do ((var (read stream) (read stream)))
+      ((typep var type) var)
+    (format t "input a ~a: " type)))
