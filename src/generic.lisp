@@ -1,12 +1,11 @@
 ;;; 通用工具包，提供一些便捷的宏和函数
 (defpackage :generic
   (:use :cl)
-  (:export :aif :awhen :aunless :aif2 :awhen2 :aunless2 :it :last1
-           :singlep :array-last :or= :or/= :or-char= :or-char/= :or-eq
-           :strcat :forever :ensure :with-ensure :logicf :with-stream-format
-           :with-collect :with-wrappers :mvpsetq :mvpsetf :make-accessor
-           :accessor :with-symbols :make-slice :range :best-position :with-opt-slots
-           :with-compare))
+  (:export :aif :awhen :aif2 :awhen2 :aunless2 :it :self :last1
+           :singlep :array-last :or= :or/= :or-char= :or-char/= :or-eq :strcat
+           :forever :ensure :with-ensure :with-stream-format
+           :with-collect :with-wrappers :with-symbols :make-slice :range :best-position
+           :with-opt-slots :with-compare :with-plist-let :with-plist-builder))
 
 (in-package :generic)
 
@@ -19,10 +18,6 @@
   "aif的when变体"
   `(aif ,cond (progn ,@then) nil))
 
-(defmacro aunless (cond &body else)
-  "这个用处不大"
-  `(aif ,cond nil (progn ,@else)))
-
 (defmacro aif2 (cond then &optional else)
   "Anaphoric if但可以进行多值判断，适用于hash"
   (let ((win-sym (gensym "win")))
@@ -34,7 +29,11 @@
   `(aif2 ,cond (progn ,@then) nil))
 
 (defmacro aunless2 (cond &body else)
-  `(aif2 ,cond nil (progn ,@else)))
+  `(aif2 ,cond nil (progn (declare (ignorable it)) ,@else)))
+
+(defmacro self (expr)
+  `(let ((self nil))
+     (setf self ,expr)))
 
 (defun array-last (array)
   "获取数组最后一个元素"
@@ -78,21 +77,6 @@
   `(do () (nil)
      ,@body))
 
-(defmacro logicf (op place num)
-  (let* ((meth (multiple-value-list (get-setf-expansion place)))
-         (tmp  (third meth))
-         (optimize-place (fifth meth))
-         (op-func
-          (ecase op
-            (:ior #'logior) (:xor #'logxor)
-            (:and #'logand)))
-         (bindings (mapcar #'list
-                           (append (first  meth) tmp)
-                           (append (second meth)
-                                   (list `(funcall ,op-func ,optimize-place ,num))))))
-    `(let* ,bindings
-       ,(fourth meth))))
-
 (defun ensure (type var default)
   (if (typep var type) var default))
 
@@ -111,20 +95,6 @@
          (unless (typep ,read-sym ',type)
            (,writer ,default))
          ,@body))))
-
-(define-setf-expander ensure (type place default)
-  (let* ((type-sym (gensym))
-         (default-sym (gensym))
-         (place-val (gensym))
-         (meth (multiple-value-list (get-setf-expansion place)))
-         (tmps (append (first meth)
-                       (list type-sym default-sym place-val)))
-         (vals (append (second meth)
-                       (list type default (fifth meth)))))
-    (values tmps vals (third meth)
-            (fourth meth)
-            `(if (typep ,place-val ,type-sym)
-                 ,place-val ,default-sym))))
 
 (defmacro with-stream-format ((&optional (stream-sym (gensym "sstream"))) &body body)
   "使用:format将多个格式化字符串拼接返回"
@@ -146,49 +116,6 @@
           wrappers
           :initial-value `(progn ,@body)
           :from-end t))
-
-(defmacro mvpsetq (vars values)
-  (let ((bindings
-         (loop for v in vars collect
-               (gensym (string v)))))
-    `(multiple-value-bind ,bindings ,values
-       ,@(loop for v in vars
-               for b in bindings collect
-               `(setq ,v ,b)))))
-
-(defmacro mvpsetf (vars values)
-  (let ((bindings
-         (loop for v in vars collect
-               (gensym (string v)))))
-    `(multiple-value-bind ,bindings ,values
-       ,@(loop for v in vars
-               for b in bindings collect
-               `(setf ,v ,b)))))
-
-(defmacro make-accessor (place &optional optimize initial-val)
-  (let* ((meth (multiple-value-list (get-setf-expansion place)))
-         (val-sym (gensym "val"))
-         (opt-place (fifth meth)))
-    `(let ,(mapcar #'list (first meth) (second meth))
-       ,(if optimize
-            `(let ((,val-sym ,initial-val))
-               (lambda (&optional ensure write)
-                 (declare (boolean ensure))
-                 (if ensure
-                     (setf ,opt-place write
-                           ,val-sym write)
-                     ,val-sym)))
-            `(lambda (&optional ensure write)
-               (declare (boolean ensure))
-               (if ensure
-                   (setf ,opt-place write)
-                   ,opt-place))))))
-
-(defun accessor (lambda-func)
-  (funcall lambda-func nil nil))
-
-(defun (setf accessor) (new-val lambda-func)
-  (funcall lambda-func t new-val))
 
 (defmacro with-symbols ((&rest symbols) &body body)
   `(let ,(loop for sym in symbols collect
@@ -236,16 +163,12 @@
 (defmacro with-opt-slots (opt-slots object &body body)
   (with-symbols (obj-sym)
     `(symbol-macrolet
-         ,(mapcar #'(lambda (slot)
-                      (cond
-                        ((listp slot)
-                         `(,(second slot)
-                            (the ,(first slot)
-                                 (slot-value ,obj-sym ',(second slot)))))
-                        ((symbolp slot)
-                         `(,slot
-                            (slot-value ,obj-sym ',slot)))))
-                  opt-slots)
+         ,(loop for slot in opt-slots
+                collect (cond
+                          ((listp slot)
+                           `(,(second slot)
+                             (the ,(first slot) (slot-value ,obj-sym ',(second slot)))))
+                          ((symbolp slot) `(,slot (slot-value ,obj-sym ',slot)))))
        (let ((,obj-sym ,object))
          ,@body))))
 
@@ -279,3 +202,19 @@
   (do ((var (read stream) (read stream)))
       ((typep var type) var)
     (format t "input a ~a: " type)))
+
+(defmacro with-plist-let ((&rest bindings) plist &body body)
+  (with-symbols (plist-sym)
+    `(let ((,plist-sym ,plist))
+       (let ,(loop for (v k) in bindings
+                   collect `(,v (getf ,plist-sym ,k)))
+         ,@body))))
+
+(defmacro with-plist-builder ((&rest bindings) &body body)
+  (with-symbols (plist-sym)
+    `(let ((,plist-sym nil))
+       (symbol-macrolet ,(loop for (v k) in bindings
+                               collect `(,v (getf ,plist-sym ,k)))
+         ,@body)
+       ,plist-sym)))
+
