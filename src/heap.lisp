@@ -1,6 +1,6 @@
 (defpackage :heap
   (:use :cl :generic)
-  (:export :heapify! :build-heap! :sort-heap!))
+  (:export #:heapify! #:build-heap! #:sort-heap!))
 
 (in-package :heap)
 

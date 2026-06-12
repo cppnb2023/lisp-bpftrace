@@ -1,6 +1,6 @@
 (defpackage :hash-op
   (:use :cl :generic :do-varient)
-  (:export :with-hash-bindings :plist-into-hash :mul-gethash))
+  (:export #:with-hash-bindings #:plist-into-hash #:mul-gethash))
 
 (in-package :hash-op)
 

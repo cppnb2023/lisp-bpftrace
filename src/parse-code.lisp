@@ -1,6 +1,6 @@
 (defpackage :parse-code
   (:use :cl)
-  (:export :with-collect-codes :with-parse-body))
+  (:export #:with-collect-codes #:with-parse-body))
 
 (in-package :parse-code)
 
