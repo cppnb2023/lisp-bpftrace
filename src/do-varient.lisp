@@ -8,14 +8,23 @@
 (define-symbol-system dc-style)
 (define-symbol-system dc-wrapper)
 
+(defmacro do-plist ((k v plist) &body body)
+  (with-symbols (plist-sym )
+    `(loop for ,plist-sym = ,plist
+             then (cddr   ,plist-sym)
+           for ,k = (car  ,plist-sym)
+           for ,v = (cadr ,plist-sym)
+           while ,plist-sym
+           do (progn ,@body))))
+
 (defmacro do-complex% (wrapper (&rest accumulations) (&rest styles) &body body &environment env)
   (let ((codes nil)) 
     (dolist (acc accumulations)
-      (do-plist-stage (k v (get-dc-acc-expansion acc env))
-        (:main (append-setf (getf codes k) v))))
+      (do-plist (k v (get-dc-acc-expansion acc env))
+        (append-setf (getf codes k) v)))
     (dolist (sty styles)
-      (do-plist-stage (k v (get-dc-style-expansion sty env))
-        (:main (append-setf (getf codes k) v))))
+      (do-plist (k v (get-dc-style-expansion sty env))
+        (append-setf (getf codes k) v)))
     (get-dc-wrapper-expansion (list wrapper codes body))))
 
 (defmacro do-complex ((&rest accumulations) (&rest styles) &body body)
@@ -23,11 +32,11 @@
 
 (define-dc-wrapper-expander :standard-wrapper (plist body)
   (with-symbols (loop first-p)
-    (with-plist-let ((bindings      :bind)  (beg-codes      :beg)
-                     (conditions    :judge) (next-codes     :next)
-                     (result-codes  :res)   (macro-bindings :macro)
-                     (initial-codes :init)  (wrappers       :wrapper)
-                     (optimize      :opt))
+    (with-plist-let ((bindings       :bind)    (beg-codes     :beg)
+                     (end-codes      :end)     (conditions    :judge)
+                     (next-codes     :next)    (result-codes  :res)
+                     (macro-bindings :macro)   (initial-codes :init)
+                     (wrappers       :wrapper) (optimize      :opt))
                     plist
       (with-parse-body ((do :do) (finally :finally)) body
         `(macrolet ((:stage (&body body)
@@ -48,6 +57,7 @@
                     (setf ,first-p nil)
                     ,@next-codes
                     (go ,loop)))
+               ,@end-codes
                ,@finally
                (values ,@result-codes))))))))
 
@@ -82,13 +92,13 @@
                       collect `(get-output-stream-string ,s))
         :opt   ((declare (stream ,@streams))))))
 
-(define-dc-style-expander :list (var list &key (by #'cdr))
+(define-dc-style-expander :list (var list)
   (with-symbols (list-sym)
     `(:bind  ((,var nil)
               (,list-sym (the list ,list)))
       :beg   ((setf ,var (car ,list-sym)))
       :judge ((null ,list-sym))
-      :next  ((setf ,list-sym (funcall ,by ,list-sym)))
+      :next  ((setf ,list-sym (cdr ,list-sym)))
       :opt   ((declare (list ,list-sym))))))
 
 (define-dc-style-expander :plist (k v plist)
@@ -119,3 +129,9 @@
       :judge ((null ,tmp-sym))
       :next  ((setf ,list-sym (cdr ,list-sym)))
       :opt   ((declare (list ,list-sym ,tmp-sym))))))
+
+(define-dc-style-expander :on (var-sym list)
+  `(:bind  ((,var-sym (the list ,list)))
+    :judge ((null ,var-sym))
+    :next  ((setf ,var-sym (cdr ,var-sym)))
+    :opt   ((declare (list ,var-sym)))))

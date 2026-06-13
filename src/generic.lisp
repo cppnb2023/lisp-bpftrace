@@ -247,7 +247,7 @@
 
 (defmacro lambda-env (parameter &body body)
   (with-symbols (tmp env)
-    `(lambda (,tmp ,env)
+    `(lambda (,tmp &optional ,env)
        (declare (ignorable ,env))
        ,(aif (member '&environment parameter)
              `(destructuring-bind ,(remove-environment-key parameter) ,tmp
