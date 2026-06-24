@@ -17,13 +17,13 @@
            while ,plist-sym
            do (progn ,@body))))
 
-(defmacro do-complex% (wrapper (&rest accumulations) (&rest styles) &body body &environment env)
+(defmacro do-complex% (wrapper (&rest accumulations) (&rest styles) &body body)
   (let ((codes nil)) 
     (dolist (acc accumulations)
-      (do-plist (k v (get-dc-acc-expansion acc env))
+      (do-plist (k v (get-dc-acc-expansion acc))
         (append-setf (getf codes k) v)))
     (dolist (sty styles)
-      (do-plist (k v (get-dc-style-expansion sty env))
+      (do-plist (k v (get-dc-style-expansion sty))
         (append-setf (getf codes k) v)))
     (get-dc-wrapper-expansion (list wrapper codes body))))
 
@@ -36,15 +36,16 @@
                      (end-codes      :end)     (conditions    :judge)
                      (next-codes     :next)    (result-codes  :result)
                      (macro-bindings :macro)   (initial-codes :init)
-                     (wrappers       :wrapper) (optimize      :optimize))
+                     (wrappers       :wrapper) (optimize      :optimize)
+                     (predo         :predo))
                     plist
       (with-parse-body ((start :start) (do :do) (finally :finally)) body
         `(macrolet ((:stage (&body body)
                       (with-parse-body ((first :first) (main :main)) body
                         `(if ,',first-p (progn ,@first) (progn ,@main)))))
            (macrolet ,macro-bindings
-             (let (,@bindings
-                   (,first-p t))
+             (let* (,@bindings
+                    (,first-p t))
                ,@optimize
                (declare (ignorable ,first-p))
                ,@initial-codes
@@ -53,6 +54,7 @@
                   ,loop
                   ,@beg-codes
                   (unless (or ,@conditions)
+                    ,@predo
                     (with-wrappers ,wrappers
                       ,@do)
                     (setf ,first-p nil)
@@ -67,9 +69,12 @@
     `(:bind  ,lists
       :macro ,(loop for sym in symbols
                     for l   in lists
-                    collect `(,sym (element) `(push ,element ,',l)))
+                    collect `(,sym (&rest element)
+                                   `(progn
+                                      ,@(loop for e in element
+                                              collect `(push ,e ,',l)))))
       :result   ,(loop for l in lists
-                    collect `(nreverse ,l))
+                       collect `(nreverse ,l))
       :optimize   ((declare (list ,@lists))))))
 
 (define-dc-acc-expander :append (&rest symbols)
@@ -77,7 +82,10 @@
     `(:bind  ,lists
       :macro ,(loop for sym in symbols
                     for l   in lists
-                    collect `(,sym (list) `(append-setf ,',l ,list)))
+                    collect `(,sym (&rest lists)
+                                   `(progn
+                                      ,@(loop for list in lists
+                                              collect `(append-setf ,',l ,list)))))
       :result   ,lists
       :optimize   ((declare (list ,@lists))))))
 
@@ -94,13 +102,22 @@
         :optimize  ((declare (stream ,@streams))))))
 
 (define-dc-style-expander :list (var list)
-  (with-symbols (list-sym)
-    `(:bind  ((,var nil)
-              (,list-sym (the list ,list)))
-      :begin   ((setf ,var (car ,list-sym)))
-      :judge ((null ,list-sym))
-      :next  ((setf ,list-sym (cdr ,list-sym)))
-      :optimize ((declare (list ,list-sym))))))
+  (if (listp var)
+      (with-symbols (list-sym tmp)
+        `(:bind  ((,list-sym (the list ,list))
+                  (,tmp nil))
+          :begin ((setf ,tmp (the list (car ,list-sym))))
+          :judge ((null ,list-sym))
+          :next  ((setf ,list-sym (cdr ,list-sym)))
+          :optimize ((declare (list ,list-sym ,tmp)))
+          :wrapper ((destructuring-bind ,var ,tmp))))
+      (with-symbols (list-sym)
+        `(:bind  ((,var nil)
+                  (,list-sym (the list ,list)))
+          :begin   ((setf ,var (car ,list-sym)))
+          :judge ((null ,list-sym))
+          :next  ((setf ,list-sym (cdr ,list-sym)))
+          :optimize ((declare (list ,list-sym)))))))
 
 (define-dc-style-expander :plist (k v plist)
   (with-symbols (plist-sym)
@@ -136,3 +153,13 @@
     :judge ((null ,var-sym))
     :next  ((setf ,var-sym (cdr ,var-sym)))
     :optimize ((declare (list ,var-sym)))))
+
+(define-dc-style-expander :across (var-sym array)
+  (with-symbols (iter-sym array-sym limit-sym)
+    `(:bind  ((,iter-sym 0) (,var-sym nil) (,array-sym (the array ,array))
+              (,limit-sym (length ,array-sym)))
+      :judge ((= ,limit-sym ,iter-sym))
+      :predo ((setf ,var-sym (aref ,array-sym ,iter-sym)))
+      :next  ((setf ,iter-sym (1+ ,iter-sym)))
+      :optimize ((declare (array ,array-sym))
+                 (declare (fixnum ,iter-sym))))))

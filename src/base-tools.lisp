@@ -4,10 +4,9 @@
    ;;generic
    #:aif #:awhen #:aif2 #:awhen2 #:aunless2 #:it #:self #:last1
    #:singlep #:array-last #:or= #:or/= #:or-char= #:or-char/= #:or-eq #:strcat
-   #:forever #:ensure #:with-ensure #:with-stream-format
-   #:with-collect #:with-wrappers #:with-symbols #:make-slice #:range #:best-position
-   #:with-opt-slots #:with-compare #:with-plist-let #:with-plist-builder
-   #:get-all-symbols #:g!-symbol-p #:lambda-env
+   #:forever #:ensure #:with-stream-format #:with-collect
+   #:with-wrappers #:with-symbols #:make-slice #:range
+   #:best-position #:with-opt-slots #:with-compare #:with-plist-let
    ;;setf-varient
    #:logicf #:mvpsetq #:mvpsetf #:append-setf #:append1-setf
    ;;heap

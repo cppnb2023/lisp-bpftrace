@@ -1,50 +1,51 @@
 (defpackage :dsl
   (:use :cl :base-tools)
   (:export #:define-dsl-expander #:get-dsl-expansion #:make-binary-operator
-           #:make-trans-operator :make-untrans-operator #:define-dsl-operator))
+           #:make-trans-operator :make-untrans-operator #:define-dsl-operator
+           #:generate-string))
 
 (in-package :dsl)
 
 (define-symbol-system dsl)
 
-(defun dsl-expand (language body &optional env)
-  (get-dsl-expansion (cons language body) env))
+(defun dsl-expand (language body)
+  (get-dsl-expansion (cons language body)))
 
 (defun make-binary-operator (expand-func single-fmt op)
-  (lambda-env (&rest parameters &environment env)
+  (lambda (&rest parameters)
     (cond
       ((singlep parameters)
        (format nil single-fmt (car parameters)))
       (t
        (do-complex ((:format fmt)) ((:list p parameters))
          (:start (fmt "("))
-         (:do (:stage (:first (fmt "~a" (funcall expand-func p env)))
-                      (:main  (fmt " ~a ~a" op (funcall expand-func p env)))))
+         (:do (:stage (:first (fmt "~a" (funcall expand-func p)))
+                      (:main  (fmt " ~a ~a" op (funcall expand-func p)))))
          (:finally (fmt ")")))))))
 
 (defun make-trans-operator (expand-func op)
-  (lambda-env (&rest parameters &environment env)
+  (lambda (&rest parameters)
     (do-complex ((:format fmt)) ((:window (a b) parameters))
       (:start (fmt "("))
       (:do (:stage (:first (fmt "~a ~a ~a"
-                                (funcall expand-func a env)
+                                (funcall expand-func a)
                                 op
-                                (funcall expand-func b env)))
+                                (funcall expand-func b)))
                    (:main  (fmt " && ~a ~a ~a"
-                                (funcall expand-func a env)
+                                (funcall expand-func a)
                                 op
-                                (funcall expand-func b env)))))
+                                (funcall expand-func b)))))
       (:finally (fmt ")")))))
 
 (defun make-untrans-operator (expand-func op)
-  (lambda-env (&rest parameters &environment env)
+  (lambda (&rest parameters)
     (do-complex ((:format fmt)) ((:on p1 parameters))
       (:start (fmt "("))
       (:do (do-complex () ((:on p2 parameters))
              (:do (fmt "~a ~a ~a"
-                       (funcall expand-func (car p1) env)
+                       (funcall expand-func (car p1))
                        op
-                       (funcall expand-func (car p2) env)))))
+                       (funcall expand-func (car p2))))))
       (:finally (fmt ")")))))
 
 (defmacro define-dsl-operator (symbol-expand expand-func &body body)
@@ -62,3 +63,16 @@
        ,@(loop for (name . args) in binary
                collect `(setf (,symbol-expand ,name)
                               (make-binary-operator #',expand-func ,@args))))))
+
+(defun generate-string (string depth)
+  (declare (string string))
+  (declare (fixnum depth))
+  (if (= depth 0)
+      string
+      (generate-string
+       (do-complex ((:format fmt)) ((:across c string))
+         (:do (fmt (cond
+                     ((char= c #\") "\\\"")
+                     ((char= c #\\) "\\\\")
+                     (t (string c))))))
+       (1- depth))))

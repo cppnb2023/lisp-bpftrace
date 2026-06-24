@@ -9,9 +9,9 @@
 (defstruct (last-memoize-cache (:conc-name lmc-))
   key cache)
 
-(defun last-memoize (idx-sym fn &rest parameter)
+(defun last-memoize (idx-sym fn &rest parameters)
   (let ((cache (gethash idx-sym *last-memoize-hash*))
-        (expr  (cons fn parameter)))
+        (expr  (cons fn parameters)))
     (unless cache
       (setf cache (setf (gethash idx-sym *last-memoize-hash*)
                         (make-last-memoize-cache))))
@@ -19,7 +19,7 @@
         (lmc-cache cache)
         (prog1
             (setf (lmc-cache cache)
-                  (apply fn parameter))
+                  (apply fn parameters))
           (setf (lmc-key cache) expr)))))
 
 (defmacro with-last-memoize ((&rest bindings) &body body &environment env)
@@ -29,3 +29,4 @@
                              `(,var (last-memoize ',(gensym) #',fn ,@args)))
                            `(,var nil)))
      ,@body))
+

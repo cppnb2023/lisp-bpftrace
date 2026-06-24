@@ -1,13 +1,10 @@
-;;; 通用工具包，提供一些便捷的宏和函数
 (defpackage :generic
   (:use :cl)
   (:export #:aif #:awhen #:aif2 #:awhen2 #:aunless2 #:it #:self #:last1
            #:singlep #:array-last #:or= #:or/= #:or-char= #:or-char/= #:or-eq #:strcat
-           #:forever #:ensure #:with-ensure #:with-stream-format
-           #:with-collect #:with-wrappers #:with-symbols #:make-slice #:range
-           #:best-position #:with-opt-slots #:with-compare #:with-plist-let
-           #:with-plist-builder #:get-all-symbols #:g!-symbol-p
-           #:lambda-env))
+           #:forever #:ensure #:with-stream-format #:with-collect
+           #:with-wrappers #:with-symbols #:make-slice #:range
+           #:best-position #:with-opt-slots #:with-compare #:with-plist-let))
 
 (in-package :generic)
 
@@ -81,22 +78,6 @@
 
 (defun ensure (type var default)
   (if (typep var type) var default))
-
-(defmacro with-ensure ((type place default) (reader writer) &body body)
-  (let* ((meth (multiple-value-list (get-setf-expansion place)))
-         (tmp  (first (third meth)))
-         (bindings (mapcar #'list (first meth) (second meth)))
-         (optimize-place (fifth meth))
-         (read-sym  (gensym "read")))
-    `(let (,@bindings
-           ,read-sym)
-       (flet ((,reader () ,read-sym)
-              (,writer (,tmp)
-                (setf ,read-sym ,(fourth meth))))
-         (setf ,read-sym ,optimize-place)
-         (unless (typep ,read-sym ',type)
-           (,writer ,default))
-         ,@body))))
 
 (defmacro with-stream-format ((&optional (stream-sym (gensym "sstream"))) &body body)
   "使用:format将多个格式化字符串拼接返回"
@@ -200,58 +181,9 @@
                        finally (return (funcall func result))))))
     (tree-reduce% tree-lst)))
 
-(defun read-what (type &optional stream)
-  (do ((var (read stream) (read stream)))
-      ((typep var type) var)
-    (format t "input a ~a: " type)))
-
 (defmacro with-plist-let ((&rest bindings) plist &body body)
   (with-symbols (plist-sym)
     `(let ((,plist-sym ,plist))
        (let ,(loop for (v k) in bindings
                    collect `(,v (getf ,plist-sym ,k)))
          ,@body))))
-
-(defmacro with-plist-builder ((&rest bindings) &body body)
-  (with-symbols (plist-sym)
-    `(let ((,plist-sym nil))
-       (symbol-macrolet ,(loop for (v k) in bindings
-                               collect `(,v (getf ,plist-sym ,k)))
-         ,@body)
-       ,plist-sym)))
-
-(defun get-all-symbols (tree)
-  (loop for n in tree
-        if (listp n)
-          append (get-all-symbols n)
-        else
-          append (list n)))
-
-(defun g!-symbol-p (symbol)
-  (let ((name (symbol-name symbol)))
-    (and (symbolp symbol)
-         (>= (length name) 2)
-         (string= name "G!" :start1 0 :end1 2))))
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun remove-environment-key (parameters)
-    (labels ((clt (list &optional result)
-               (declare (optimize (speed 3) (debug 0)))
-               (if (null list)
-                   result
-                   (if (eq (car list) '&environment)
-                       (clt (cddr list) result)
-                       (clt (cdr list) (cons (car list) result))))))
-      (when (listp parameters)
-        (nreverse (clt parameters))))))
-
-(defmacro lambda-env (parameter &body body)
-  (with-symbols (tmp env)
-    `(lambda (,tmp &optional ,env)
-       (declare (ignorable ,env))
-       ,(aif (member '&environment parameter)
-             `(destructuring-bind ,(remove-environment-key parameter) ,tmp
-                (let ((,(second it) ,env))
-                  ,@body))
-             `(destructuring-bind ,parameter ,tmp
-                ,@body)))))
