@@ -1,6 +1,6 @@
 (defpackage :do-varient
   (:use :cl :generic :parse-code :setf-varient :symbol-system)
-  (:export #:do-complex #:define-dc-acc-expander #:define-dc-style-expander))
+  (:export #:do-complex #:defun-dc-acc #:defun-dc-style #:defun-dc-wrapper))
 
 (in-package :do-varient)
 
@@ -20,17 +20,17 @@
 (defmacro do-complex% (wrapper (&rest accumulations) (&rest styles) &body body)
   (let ((codes nil)) 
     (dolist (acc accumulations)
-      (do-plist (k v (get-dc-acc-expansion acc))
+      (do-plist (k v (apply-dc-acc (car acc) (cdr acc)))
         (append-setf (getf codes k) v)))
     (dolist (sty styles)
-      (do-plist (k v (get-dc-style-expansion sty))
+      (do-plist (k v (apply-dc-style (car sty) (cdr sty)))
         (append-setf (getf codes k) v)))
-    (get-dc-wrapper-expansion (list wrapper codes body))))
+    (funcall-dc-wrapper wrapper codes body)))
 
 (defmacro do-complex ((&rest accumulations) (&rest styles) &body body)
   `(do-complex% :standard-wrapper ,accumulations ,styles ,@body))
 
-(define-dc-wrapper-expander :standard-wrapper (plist body)
+(defun-dc-wrapper :standard-wrapper (plist body)
   (with-symbols (loop first-p)
     (with-plist-let ((bindings       :bind)    (beg-codes     :begin)
                      (end-codes      :end)     (conditions    :judge)
@@ -64,7 +64,7 @@
                ,@finally
                (values ,@result-codes))))))))
 
-(define-dc-acc-expander :collect (&rest symbols)
+(defun-dc-acc :collect (&rest symbols)
   (let ((lists (loop repeat (length symbols) collect (gensym "list"))))
     `(:bind  ,lists
       :macro ,(loop for sym in symbols
@@ -77,7 +77,7 @@
                        collect `(nreverse ,l))
       :optimize   ((declare (list ,@lists))))))
 
-(define-dc-acc-expander :append (&rest symbols)
+(defun-dc-acc :append (&rest symbols)
   (let ((lists (loop repeat (length symbols) collect (gensym "list"))))
     `(:bind  ,lists
       :macro ,(loop for sym in symbols
@@ -89,7 +89,7 @@
       :result   ,lists
       :optimize   ((declare (list ,@lists))))))
 
-(define-dc-acc-expander :format (&rest symbols)
+(defun-dc-acc :format (&rest symbols)
   (let ((streams (loop repeat (length symbols) collect (gensym "stream"))))
       `(:bind  ,(loop for s in streams
                       collect `(,s (make-string-output-stream)))
@@ -101,7 +101,7 @@
                       collect `(get-output-stream-string ,s))
         :optimize  ((declare (stream ,@streams))))))
 
-(define-dc-style-expander :list (var list)
+(defun-dc-style :list (var list)
   (if (listp var)
       (with-symbols (list-sym tmp)
         `(:bind  ((,list-sym (the list ,list))
@@ -119,7 +119,7 @@
           :next  ((setf ,list-sym (cdr ,list-sym)))
           :optimize ((declare (list ,list-sym)))))))
 
-(define-dc-style-expander :plist (k v plist)
+(defun-dc-style :plist (k v plist)
   (with-symbols (plist-sym)
     `(:bind  ((,plist-sym (the list ,plist)) ,k ,v)
       :begin   ((setf ,k (car ,plist-sym))
@@ -128,14 +128,14 @@
       :next ((setf ,plist-sym (cddr ,plist-sym)))
       :optimize ((declare (list ,plist-sym))))))
 
-(define-dc-style-expander :times (i limit)
+(defun-dc-style :times (i limit)
   (with-symbols (limit-sym)
     `(:bind  ((,limit-sym (the integer ,limit)) (,i 0))
       :judge ((= ,limit-sym ,i))
       :next  ((setf ,i (1+ ,i)))
       :optimize ((declare (integer ,limit-sym ,i))))))
 
-(define-dc-style-expander :window (vars list)
+(defun-dc-style :window (vars list)
   (with-symbols (list-sym tmp-sym)
     `(:bind    ((,list-sym (the list ,list)) (,tmp-sym nil) ,@vars)
       :begin   ((setf ,tmp-sym ,list-sym)
@@ -148,13 +148,13 @@
       :next  ((setf ,list-sym (cdr ,list-sym)))
       :optimize ((declare (list ,list-sym ,tmp-sym))))))
 
-(define-dc-style-expander :on (var-sym list)
+(defun-dc-style :on (var-sym list)
   `(:bind  ((,var-sym (the list ,list)))
     :judge ((null ,var-sym))
     :next  ((setf ,var-sym (cdr ,var-sym)))
     :optimize ((declare (list ,var-sym)))))
 
-(define-dc-style-expander :across (var-sym array)
+(defun-dc-style :across (var-sym array)
   (with-symbols (iter-sym array-sym limit-sym)
     `(:bind  ((,iter-sym 0) (,var-sym nil) (,array-sym (the array ,array))
               (,limit-sym (length ,array-sym)))

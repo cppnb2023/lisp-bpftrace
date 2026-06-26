@@ -1,12 +1,18 @@
 (defpackage :generic
   (:use :cl)
-  (:export #:aif #:awhen #:aif2 #:awhen2 #:aunless2 #:it #:self #:last1
+  (:export #:aif #:awhen #:acond #:aif2 #:awhen2 #:aunless2 #:it #:self #:last1
            #:singlep #:array-last #:or= #:or/= #:or-char= #:or-char/= #:or-eq #:strcat
            #:forever #:ensure #:with-stream-format #:with-collect
            #:with-wrappers #:with-symbols #:make-slice #:range
-           #:best-position #:with-opt-slots #:with-compare #:with-plist-let))
+           #:best-position #:with-opt-slots #:with-compare #:with-plist-let
+           #:with-debug))
 
 (in-package :generic)
+
+(defmacro with-symbols ((&rest symbols) &body body)
+  `(let ,(loop for sym in symbols collect
+               `(,sym (gensym (string ',sym))))
+     ,@body))
 
 (defmacro aif (cond then &optional else)
   "Anaphoric if，用it保存cond返回值"
@@ -16,6 +22,13 @@
 (defmacro awhen (cond &body then)
   "aif的when变体"
   `(aif ,cond (progn ,@then) nil))
+
+(defmacro acond (&rest body)
+  (destructuring-bind (first . rest) body
+    (destructuring-bind (cond . codes) first
+      `(aif ,cond
+            (progn ,@codes)
+            ,(if rest `(acond ,@rest) nil)))))
 
 (defmacro aif2 (cond then &optional else)
   "Anaphoric if但可以进行多值判断，适用于hash"
@@ -76,8 +89,12 @@
   `(do () (nil)
      ,@body))
 
-(defun ensure (type var default)
-  (if (typep var type) var default))
+(defmacro ensure (var default &optional type)
+  (with-symbols (var-sym)
+    `(let ((,var-sym ,var))
+       ,(if type
+            `(if (typep ,var-sym ,type) ,var-sym ,default)
+            `(if ,var-sym ,var-sym ,default)))))
 
 (defmacro with-stream-format ((&optional (stream-sym (gensym "sstream"))) &body body)
   "使用:format将多个格式化字符串拼接返回"
@@ -99,11 +116,6 @@
           wrappers
           :initial-value `(progn ,@body)
           :from-end t))
-
-(defmacro with-symbols ((&rest symbols) &body body)
-  `(let ,(loop for sym in symbols collect
-               `(,sym (gensym (string ',sym))))
-     ,@body))
 
 (defun make-slice (array &optional start end)
   (setf start (if start start 0))
@@ -187,3 +199,12 @@
        (let ,(loop for (v k) in bindings
                    collect `(,v (getf ,plist-sym ,k)))
          ,@body))))
+
+(defmacro with-debug ((cond &optional print-codes) &body body)
+  (with-symbols (cond-sym codes-sym result-sym)
+    `(let ((,cond-sym ,cond))
+       (if ,cond-sym
+           (let ((,codes-sym ,(if print-codes print-codes `(quote (progn ,@body)))))
+             (format *debug-io* "~%enter: ~s~%" ,codes-sym)
+             (let ((,result-sym (progn ,@body)))
+               (format *debug-io* "result: ~a~%"  ,result-sym)))))))

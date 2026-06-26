@@ -2,7 +2,7 @@
   (:use :cl :generic :do-varient :hash-op :setf-varient :parse-code :symbol-system)
   (:export
    ;;generic
-   #:aif #:awhen #:aif2 #:awhen2 #:aunless2 #:it #:self #:last1
+   #:aif #:awhen #:acond #:aif2 #:awhen2 #:aunless2 #:it #:self #:last1
    #:singlep #:array-last #:or= #:or/= #:or-char= #:or-char/= #:or-eq #:strcat
    #:forever #:ensure #:with-stream-format #:with-collect
    #:with-wrappers #:with-symbols #:make-slice #:range
@@ -20,7 +20,7 @@
    ;;parse-code
    #:with-collect-codes #:with-parse-body
    ;;symbol-system
-   #:define-symbol-system
+   #:define-symbol-system #:symbol-system-function #:symbol-system-macro
    ;;memoize
    #:last-memoize #:with-last-memoize))
 
