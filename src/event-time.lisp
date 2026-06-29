@@ -1,11 +1,12 @@
 (defpackage :event-time
   (:use :cl :generic)
-  (:export #:et-info #:et-seconds #:et-mseconds #:event-time #:newer #:older))
+  (:export #:et-data #:et-seconds #:et-mseconds #:event-time #:newer #:older
+           #:make-event-time))
 
 (in-package :event-time)
 
 (defstruct (event-time (:conc-name et-))
-  info
+  data
   seconds
   mseconds)
 

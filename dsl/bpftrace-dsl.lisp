@@ -54,21 +54,13 @@
                collect `(,s (bpftrace-gensym)))
      ,@body))
 
+;;暂不提供字符串输出
 (defun make-placeholder (symbol)
   (ecase symbol
     (:u32 "%u")
     (:u64 "%lu")
     (:i32 "%d")
-    (:i64 "%ld")
-    (:str "{%u %s")))
-
-(set-macro-character
- #\{
- (lambda (stream ch)
-   (declare (ignorable ch))
-   (with-output-to-string (s)
-     (loop repeat (read stream)
-           do (format s "~c" (read-char stream))))))
+    (:i64 "%ld")))
 
 (defun-bpftrace :printf% (fmt &rest args)
   (format nil "printf(\"~a\"~{, ~a~})"
@@ -87,11 +79,7 @@
         (:do (fmt " ~s ~a"
                   (the keyword k)
                   (make-placeholder (the keyword p)))
-             (if (eq p :str)
-                 (with-bpftrace-symbols (tmp)
-                   (bind `(,tmp ,v))
-                   (arg  `(:strlen ,tmp) tmp))
-                 (arg v)))
+             (arg v))
         (:finally (fmt ")")))
     `(:let ,bind
        (:printf% ,fmt ,@args))))
