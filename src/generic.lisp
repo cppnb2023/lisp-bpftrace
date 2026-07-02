@@ -1,11 +1,10 @@
 (defpackage :generic
   (:use :cl)
   (:export #:aif #:awhen #:acond #:aif2 #:awhen2 #:aunless2 #:it #:self #:last1
-           #:singlep #:array-last #:or= #:or/= #:or-char= #:or-char/= #:or-eq #:strcat
+           #:singlep #:array-last #:or= #:or/= #:or-char= #:or-char/= #:or-eq
            #:forever #:ensure #:with-stream-format #:with-collect
-           #:with-wrappers #:with-symbols #:make-slice #:range
-           #:best-position #:with-opt-slots #:with-compare #:with-plist-let
-           #:with-debug))
+           #:with-wrappers #:with-symbols #:with-opt-slots #:with-compare
+           #:with-plist-let #:with-debug #:to-key-binding))
 
 (in-package :generic)
 
@@ -117,44 +116,6 @@
           :initial-value `(progn ,@body)
           :from-end t))
 
-(defun make-slice (array &optional start end)
-  (setf start (if start start 0))
-  (setf end   (if end end (length array)))
-  (make-array (- end start)
-              :displaced-to array
-              :displaced-index-offset start))
-
-(defmacro range (&key gt ge lt le)
-  (when (and gt ge)
-    (error "have :GT and :GE at once"))
-  (when (and lt le)
-    (error "hava :LT and :LE at once"))
-  (let ((condition nil)
-        (arg-sym (gensym "arg")))
-    (when gt (push `(>  ,arg-sym ,gt) condition))
-    (when ge (push `(>= ,arg-sym ,ge) condition))
-    (when lt (push `(<  ,arg-sym ,lt) condition))
-    (when le (push `(<= ,arg-sym ,le) condition))
-    `(lambda (,arg-sym)
-       (and ,@condition))))
-
-(defun best-position (array test &key start end specify)
-  (if specify
-      (progn
-        (loop with res = (car specify)
-              for i in (cdr specify)
-              do (unless (funcall test (aref array res) (aref array i))
-                   (setf res i))
-              finally (return res)))
-      (progn
-        (unless start (setf start 0))
-        (unless end   (setf end   (length array)))
-        (loop with res = start
-              for i from (1+ start) below end
-              do (unless (funcall test (aref array res) (aref array i))
-                   (setf res i))
-              finally (return res)))))
-
 (defmacro with-opt-slots (opt-slots object &body body)
   (with-symbols (obj-sym)
     `(symbol-macrolet
@@ -181,18 +142,6 @@
 (defun single-level-p (lst)
   (and (listp lst) (loop for code in lst always (atom code))))
 
-(defun tree-reduce (tree-lst func)
-  (labels ((tree-reduce% (lst)
-             (if (single-level-p lst)
-                 (funcall func lst)
-                 (loop for code in lst
-                       if (atom code)
-                         collect code into result
-                       else
-                         collect (tree-reduce% code) into result
-                       finally (return (funcall func result))))))
-    (tree-reduce% tree-lst)))
-
 (defmacro with-plist-let ((&rest bindings) plist &body body)
   (with-symbols (plist-sym)
     `(let ((,plist-sym ,plist))
@@ -208,3 +157,12 @@
              (format *debug-io* "~%enter: ~s~%" ,codes-sym)
              (let ((,result-sym (progn ,@body)))
                (format *debug-io* "result: ~a~%"  ,result-sym)))))))
+
+(defun to-key-binding (obj)
+  (etypecase obj
+    (symbol `(,obj ,(intern (symbol-name obj) :keyword) nil))
+    (list
+     (destructuring-bind (bind &optional default) obj
+       (etypecase bind
+         (symbol `(,bind ,(intern (symbol-name bind) :keyword) ,default))
+         (list `(,(first bind) ,(second bind) ,default)))))))

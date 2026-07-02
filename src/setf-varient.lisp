@@ -1,6 +1,7 @@
 (defpackage :setf-varient
   (:use :cl)
-  (:export #:logicf #:mvpsetq #:mvpsetf #:append-setf #:append1-setf))
+  (:export #:logicf #:mvpsetq #:mvpsetf #:append-setf #:append1-setf
+           #:union-setf #:union1-setf #:delete-setf))
 
 (in-package :setf-varient)
 
@@ -52,13 +53,19 @@
                `(setf ,v ,b)))))
 
 (defmacro define-complex-setf (name function)
-  `(defmacro ,name (place list &environment env)
+  `(defmacro ,name (place obj &environment env)
      (let ((meth (multiple-value-list (get-setf-expansion place env))))
        `(let ,(mapcar #'list (first meth) (second meth))
-          (let ((,(first (third meth)) (funcall ,',function ,(fifth meth) ,list)))
+          (let ((,(first (third meth)) (funcall ,',function ,(fifth meth) ,obj)))
             ,(fourth meth))))))
 
 (define-complex-setf append-setf #'append)
+(define-complex-setf union-setf #'union)
+(define-complex-setf delete-setf #'delete)
 
 (defmacro append1-setf (place element)
   `(append-setf ,place (list ,element)))
+
+(defmacro union1-setf (place element)
+  `(union-setf ,place (list ,element)))
+

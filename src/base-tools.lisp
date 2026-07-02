@@ -1,15 +1,16 @@
 (defpackage :base-tools
   (:use :cl :generic :do-varient :hash-op :setf-varient :parse-code :symbol-system
-        :event-time :memoize :void)
+   :event-time :memoize)
   (:export
    ;;generic
    #:aif #:awhen #:acond #:aif2 #:awhen2 #:aunless2 #:it #:self #:last1
-   #:singlep #:array-last #:or= #:or/= #:or-char= #:or-char/= #:or-eq #:strcat
+   #:singlep #:array-last #:or= #:or/= #:or-char= #:or-char/= #:or-eq
    #:forever #:ensure #:with-stream-format #:with-collect
-   #:with-wrappers #:with-symbols #:make-slice #:range
-   #:best-position #:with-opt-slots #:with-compare #:with-plist-let
+   #:with-wrappers #:with-symbols #:with-opt-slots #:with-compare
+   #:with-plist-let #:with-debug #:to-key-binding
    ;;setf-varient
-   #:logicf #:mvpsetq #:mvpsetf #:append-setf #:append1-setf
+   #:logicf #:mvpsetq #:mvpsetf #:append-setf #:append1-setf #:union-setf #:union1-setf
+   #:delete-setf
    ;;heap
    #:heapify! #:build-heap! #:sort-heap!
    ;;event-time
@@ -17,16 +18,14 @@
    ;;do-varient
    #:do-complex #:define-dc-acc-expander #:define-dc-style-expander
    ;;hash-op
-   #:with-hash-bindings #:with-hash-let #:mul-gethash #:hash-lambda #:to-hash-binding
+   #:with-hash-let #:hash-lambda
    ;;parse-code
    #:with-collect-codes #:with-parse-body
    ;;symbol-system
    #:define-symbol-system #:symbol-system-function #:symbol-system-macro
    ;;memoize
    #:last-memoize #:with-last-memoize
-   ;;void
-   :+void+ :vif :vwhen :vunless :vwhen-void :avif :avwhen :avwhen-void
-   :vife :avife))
+   ))
 
 (in-package :base-tools)
 
